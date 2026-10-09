@@ -1,0 +1,12 @@
+menu "OTA Suite network"
+    config OTA_SUITE_AP_PASSWORD
+        string "Access point / web admin password (empty: generate and store)"
+        default ""
+        help
+            Use 8 to 63 characters. If empty, a random password is generated
+            once, stored in NVS, and printed on the serial console.
+            The web interface uses username admin and this same password.
+    config OTA_SUITE_SNTP_SERVER
+        string "Time server for HTTPS certificate validation"
+        default "pool.ntp.org"
+endmenu

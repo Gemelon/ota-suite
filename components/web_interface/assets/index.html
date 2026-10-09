@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OTA Suite</title>
+  <link href="/bootstrap.min.css" rel="stylesheet">
+  <script src="/app.js" defer></script>
+</head>
+<body class="bg-body-tertiary">
+  <main class="container py-4">
+    <h1 class="mb-1">OTA Suite</h1>
+    <p class="text-body-secondary">WLAN-Einrichtung und manuelles Firmware-Update</p>
+    <div id="connection-error" class="alert alert-danger d-none" role="alert"></div>
+    <div id="action-result" class="alert alert-info d-none" role="status"></div>
+    <div class="row g-4">
+      <section class="col-lg-6" aria-labelledby="info-title">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 id="info-title" class="h4">Geraeteinformation</h2>
+            <dl class="row mb-0">
+              <dt class="col-sm-5">Firmware</dt><dd id="version" class="col-sm-7">Wird geladen...</dd>
+              <dt class="col-sm-5">Projekt</dt><dd id="project" class="col-sm-7">-</dd>
+              <dt class="col-sm-5">WLAN</dt><dd id="network" class="col-sm-7">-</dd>
+              <dt class="col-sm-5">WLAN-IP</dt><dd id="ip" class="col-sm-7">-</dd>
+              <dt class="col-sm-5">Einrichtungs-AP</dt><dd id="ap-ssid" class="col-sm-7">-</dd>
+              <dt class="col-sm-5">AP-Adresse</dt><dd class="col-sm-7">http://192.168.4.1</dd>
+              <dt class="col-sm-5">HTTPS-Uhrzeit</dt><dd id="time" class="col-sm-7">-</dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+      <section class="col-lg-6" aria-labelledby="ota-title">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 id="ota-title" class="h4">Firmware-Update (OTA)</h2>
+            <p class="text-body-secondary">Verfuegbarkeit wird nach WLAN-Verbindung und alle sechs Stunden
+              geprueft. Keine automatische Installation: die Firmware wird erst nach Bestaetigung geladen.</p>
+            <div id="update-message" class="alert alert-info" role="status">Noch keine Pruefung.</div>
+            <p id="update-version"></p>
+            <p id="update-notes" class="text-break"></p>
+            <p id="update-last-success" class="small"></p>
+            <button id="update-check" class="btn btn-outline-primary mb-3" type="button" disabled>Updates pruefen</button>
+            <div id="ota-transport-warning" class="alert alert-warning d-none" role="alert"></div>
+            <div id="ota-message" class="alert alert-info" role="status">Status wird geladen...</div>
+            <p id="ota-requirement" class="small"></p>
+            <label for="ota-progress" class="form-label">Download-Fortschritt</label>
+            <progress id="ota-progress" class="w-100" max="100" value="0">0%</progress>
+            <p id="ota-bytes" class="small text-body-secondary">Noch kein Update gestartet.</p>
+            <div class="alert alert-warning">Waehrend des Updates die Stromversorgung nicht trennen.
+              Nach erfolgreicher Pruefung startet das Geraet neu.</div>
+            <button id="ota-start" class="btn btn-primary" type="button" disabled>Update starten</button>
+          </div>
+        </div>
+      </section>
+      <section class="col-12" aria-labelledby="wifi-title">
+        <div class="card">
+          <div class="card-body">
+            <h2 id="wifi-title" class="h4">WLAN einrichten</h2>
+            <p>Verbinden Sie das Geraet mit einem WLAN mit Internetzugang.
+              Der geschuetzte Einrichtungs-Access-Point bleibt als Rueckweg aktiv.</p>
+            <p id="network-message" class="text-body-secondary" role="status"></p>
+            <form id="wifi-form" class="row g-3">
+              <div class="col-md-5">
+                <label for="ssid" class="form-label">WLAN-Name (SSID)</label>
+                <input id="ssid" class="form-control" name="ssid" maxlength="32" required autocomplete="off">
+              </div>
+              <div class="col-md-5">
+                <label for="password" class="form-label">WLAN-Passwort</label>
+                <input id="password" class="form-control" name="password" type="password"
+                       maxlength="64" autocomplete="new-password">
+                <div class="form-text">Leer fuer offenes WLAN; sonst 8-63 Bytes oder 64 Hex-Zeichen.</div>
+              </div>
+              <div class="col-md-2 d-flex align-items-start pt-md-4">
+                <button id="wifi-save" class="btn btn-primary mt-md-2" type="submit" disabled>Speichern</button>
+              </div>
+            </form>
+            <p class="small mt-3 mb-0">Beim Wechsel des WLAN-Kanals kann die AP-Verbindung kurz abbrechen.
+              Danach ggf. erneut mit dem Access Point verbinden. Zugangsdaten werden im Geraet gespeichert.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

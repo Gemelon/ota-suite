@@ -1,0 +1,9 @@
+menu "OTA Suite update checks"
+    config OTA_SUITE_UPDATE_MANIFEST_URL
+        string "Fixed firmware manifest URL"
+        default "https://updates.example.org/firmware.json"
+        help
+            Only the manifest is fetched automatically. Images must be in the same
+            directory and origin as this URL and named <project>-<version>.bin.
+            HTTP requires OTA_SUITE_OTA_ALLOW_HTTP; HTTPS requires valid CA/date checks.
+endmenu

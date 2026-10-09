@@ -1,0 +1,10 @@
+menu "OTA Suite firmware updates"
+    config OTA_SUITE_OTA_ALLOW_HTTP
+        bool "Allow unencrypted HTTP OTA (local testing only)"
+        default n
+        select ESP_HTTPS_OTA_ALLOW_HTTP
+        help
+            HTTP cannot authenticate the firmware server or protect against
+            firmware replacement in transit. Only use on a trusted test LAN.
+            HTTPS certificate validation remains enabled for HTTPS URLs.
+endmenu
