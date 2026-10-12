@@ -18,8 +18,8 @@ test("publication uses real binary metadata and immutable versioned releases", (
     fs.mkdirSync(destination);
     const bytes = Buffer.from("test ESP image bytes, not ELF descriptor");
     fs.writeFileSync(source, bytes);
-    const publish = (version, urlPath = "") => spawnSync(cmake, [
-      `-DSOURCE_FILE=${source}`, `-DDESTINATION_DIR=${destination}${path.sep}`,
+    const publish = (version, urlPath = "", trailingSeparator = false) => spawnSync(cmake, [
+      `-DSOURCE_FILE=${source}`, `-DDESTINATION_DIR=${destination}${trailingSeparator ? path.sep : ""}`,
       `-DFIRMWARE_VERSION=${version}`, "-DFIRMWARE_PROJECT=ota_suite_demo",
       "-DFIRMWARE_TARGET=esp32s3", "-DFIRMWARE_ORIGIN=https://updates.example.org",
       `-DFIRMWARE_URL_PATH=${urlPath}`,
@@ -37,7 +37,7 @@ test("publication uses real binary metadata and immutable versioned releases", (
     assert.deepEqual(fs.readFileSync(path.join(destination, "ota_suite_demo-1.2.0.bin")), bytes);
     assert.deepEqual(fs.readFileSync(path.join(destination, "ota_suite_demo.bin")), bytes);
     assert.ok(!fs.readdirSync(destination).some(name => name.endsWith(".uploading")));
-    result = publish("1.2.0");
+    result = publish("1.2.0", "", true);
     assert.equal(result.status, 0, result.stderr);
     result = publish("1.2.0", "/BatteryTester");
     assert.equal(result.status, 0, result.stderr);
@@ -60,6 +60,7 @@ test("publication uses real binary metadata and immutable versioned releases", (
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(fs.readFileSync(manifestFile)).version, "1.2.1");
     assert.deepEqual(fs.readFileSync(path.join(destination, "ota_suite_demo-1.2.0.bin")), bytes);
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["nas", "source.bin"]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

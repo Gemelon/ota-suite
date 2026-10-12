@@ -150,6 +150,7 @@ cmake "-DSOURCE_FILE=examples\esp32s3-starter\build\ota_suite_starter.bin" `
 ```
 
 `FIRMWARE_ORIGIN` specifies only protocol, host and optional port.
+The destination directory may be supplied with or without a trailing path separator.
 `FIRMWARE_URL_PATH` is an optional web directory such as `/my-device` or
 `/esp/my-device`, without a trailing slash; omit it for the web root.
 It is independent of the local `DESTINATION_DIR`. Configure the device manifest

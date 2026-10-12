@@ -21,7 +21,8 @@ endif()
 file(SHA256 "${SOURCE_FILE}" source_hash)
 file(SIZE "${SOURCE_FILE}" source_size)
 set(versioned_name "${FIRMWARE_PROJECT}-${FIRMWARE_VERSION}.bin")
-set(versioned "${DESTINATION_DIR}${versioned_name}")
+file(TO_CMAKE_PATH "${DESTINATION_DIR}" destination_path)
+cmake_path(APPEND destination_path "${versioned_name}" OUTPUT_VARIABLE versioned)
 
 function(copy_verified destination)
     set(temporary "${destination}.uploading")
@@ -54,8 +55,9 @@ else()
 endif()
 
 # The compatibility name is not used by manifest-aware devices.
-copy_verified("${DESTINATION_DIR}${FIRMWARE_PROJECT}.bin")
-set(manifest "${DESTINATION_DIR}firmware.json")
+cmake_path(APPEND destination_path "${FIRMWARE_PROJECT}.bin" OUTPUT_VARIABLE compatibility)
+copy_verified("${compatibility}")
+cmake_path(APPEND destination_path "firmware.json" OUTPUT_VARIABLE manifest)
 file(WRITE "${manifest}.uploading"
     "{\n  \"project\": \"${FIRMWARE_PROJECT}\",\n  \"target\": \"${FIRMWARE_TARGET}\",\n  \"version\": \"${FIRMWARE_VERSION}\",\n  \"url\": \"${FIRMWARE_ORIGIN}${FIRMWARE_URL_PATH}/${versioned_name}\",\n  \"size\": ${source_size},\n  \"sha256\": \"${source_hash}\",\n  \"notes\": \"Manifest-based update availability; manual installation only.\"\n}\n")
 file(RENAME "${manifest}.uploading" "${manifest}" RESULT result)
