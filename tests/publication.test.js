@@ -18,10 +18,11 @@ test("publication uses real binary metadata and immutable versioned releases", (
     fs.mkdirSync(destination);
     const bytes = Buffer.from("test ESP image bytes, not ELF descriptor");
     fs.writeFileSync(source, bytes);
-    const publish = (version) => spawnSync(cmake, [
+    const publish = (version, urlPath = "") => spawnSync(cmake, [
       `-DSOURCE_FILE=${source}`, `-DDESTINATION_DIR=${destination}${path.sep}`,
       `-DFIRMWARE_VERSION=${version}`, "-DFIRMWARE_PROJECT=ota_suite_demo",
       "-DFIRMWARE_TARGET=esp32s3", "-DFIRMWARE_ORIGIN=https://updates.example.org",
+      `-DFIRMWARE_URL_PATH=${urlPath}`,
       "-P", script,
     ], { encoding: "utf8" });
     let result = publish("1.2.0");
@@ -38,7 +39,17 @@ test("publication uses real binary metadata and immutable versioned releases", (
     assert.ok(!fs.readdirSync(destination).some(name => name.endsWith(".uploading")));
     result = publish("1.2.0");
     assert.equal(result.status, 0, result.stderr);
+    result = publish("1.2.0", "/BatteryTester");
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(fs.readFileSync(manifestFile)).url,
+      "https://updates.example.org/BatteryTester/ota_suite_demo-1.2.0.bin");
     const before = fs.readFileSync(manifestFile);
+    for (const invalidPath of ["/../private", "/BatteryTester/", "BatteryTester", "/bad?query"]) {
+      result = publish("1.2.0", invalidPath);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Invalid FIRMWARE_URL_PATH/);
+      assert.deepEqual(fs.readFileSync(manifestFile), before);
+    }
     fs.writeFileSync(source, "different bytes");
     result = publish("1.2.0");
     assert.notEqual(result.status, 0);

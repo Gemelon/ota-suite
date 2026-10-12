@@ -8,6 +8,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "sdkconfig.h"
 #include "mbedtls/base64.h"
 #include "network_manager.h"
 #include "ota_manager.h"
@@ -19,10 +20,23 @@ extern const unsigned char script_start[] asm("_binary_app_js_start");
 extern const unsigned char script_end[] asm("_binary_app_js_end");
 extern const unsigned char css_start[] asm("_binary_bootstrap_min_css_start");
 extern const unsigned char css_end[] asm("_binary_bootstrap_min_css_end");
+extern const unsigned char theme_start[] asm("_binary_app_css_start");
+extern const unsigned char theme_end[] asm("_binary_app_css_end");
+extern const unsigned char i18n_start[] asm("_binary_i18n_js_start");
+extern const unsigned char i18n_end[] asm("_binary_i18n_js_end");
+extern const unsigned char en_start[] asm("_binary_en_json_start");
+extern const unsigned char en_end[] asm("_binary_en_json_end");
+extern const unsigned char de_start[] asm("_binary_de_json_start");
+extern const unsigned char de_end[] asm("_binary_de_json_end");
 
 static const char *TAG = "web";
 static char expected_auth[128];
 static char csrf_token[33];
+#define MAX_EXTENSIONS 8
+static const web_interface_extension_t *extensions[MAX_EXTENSIONS];
+static size_t extension_count;
+static httpd_uri_t extension_asset_routes[MAX_EXTENSIONS][2];
+static char extension_asset_paths[MAX_EXTENSIONS][2][40];
 
 static void response_headers(httpd_req_t *req)
 {
@@ -57,19 +71,19 @@ static bool equal_secret(const char *a, const char *b)
     return difference == 0;
 }
 
-static bool authorize(httpd_req_t *req, bool mutation)
+bool web_interface_authorize_request(httpd_req_t *req, bool mutation)
 {
     char value[128];
     if (httpd_req_get_hdr_value_str(req, "Authorization", value, sizeof(value)) != ESP_OK ||
         !equal_secret(value, expected_auth)) {
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"OTA Suite\", charset=\"UTF-8\"");
-        error_response(req, "401 Unauthorized", "Anmeldung erforderlich: admin / Access-Point-Passwort.");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Device\", charset=\"UTF-8\"");
+        error_response(req, "401 Unauthorized", "Login required: admin / access point password.");
         return false;
     }
     if (mutation &&
         (httpd_req_get_hdr_value_str(req, "X-CSRF-Token", value, sizeof(value)) != ESP_OK ||
          !equal_secret(value, csrf_token))) {
-        error_response(req, "403 Forbidden", "Ungueltiges Sitzungstoken. Seite neu laden.");
+        error_response(req, "403 Forbidden", "Invalid session token. Reload the page.");
         return false;
     }
     return true;
@@ -77,17 +91,38 @@ static bool authorize(httpd_req_t *req, bool mutation)
 
 static esp_err_t index_handler(httpd_req_t *req)
 {
-    if (!authorize(req, false)) {
+    if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
     response_headers(req);
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, (const char *)index_start, index_end - index_start);
+    const char *start = (const char *)index_start;
+    const char *title = strstr(start, "<title>Firmware</title>");
+    if (title == NULL) {
+        return ESP_FAIL;
+    }
+    esp_err_t err = httpd_resp_send_chunk(req, start, title - start);
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, "<title>");
+    }
+    for (const char *p = esp_app_get_description()->project_name; err == ESP_OK && *p; ++p) {
+        switch (*p) {
+        case '&': err = httpd_resp_sendstr_chunk(req, "&amp;"); break;
+        case '<': err = httpd_resp_sendstr_chunk(req, "&lt;"); break;
+        case '>': err = httpd_resp_sendstr_chunk(req, "&gt;"); break;
+        default: err = httpd_resp_send_chunk(req, p, 1); break;
+        }
+    }
+    if (err == ESP_OK) {
+        const char *rest = title + strlen("<title>Firmware");
+        err = httpd_resp_send_chunk(req, rest, (const char *)index_end - rest);
+    }
+    return err == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : err;
 }
 
 static esp_err_t script_handler(httpd_req_t *req)
 {
-    if (!authorize(req, false)) {
+    if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
     response_headers(req);
@@ -97,12 +132,40 @@ static esp_err_t script_handler(httpd_req_t *req)
 
 static esp_err_t css_handler(httpd_req_t *req)
 {
-    if (!authorize(req, false)) {
+    if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
     response_headers(req);
     httpd_resp_set_type(req, "text/css; charset=utf-8");
     return httpd_resp_send(req, (const char *)css_start, css_end - css_start);
+}
+
+static esp_err_t language_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_request(req, false)) return ESP_OK;
+    response_headers(req);
+    httpd_resp_set_type(req, "application/javascript; charset=utf-8");
+    esp_err_t err = httpd_resp_sendstr_chunk(req, "window.EBCLanguages={en:");
+    if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)en_start, en_end - en_start);
+    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",de:");
+    if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)de_start, de_end - de_start);
+#ifdef CONFIG_OTA_SUITE_WEB_SD_LANGUAGES
+    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",sdEnabled:true};\n");
+#else
+    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",sdEnabled:false};\n");
+#endif
+    if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)i18n_start, i18n_end - i18n_start);
+    return err == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : err;
+}
+
+static esp_err_t theme_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_request(req, false)) {
+        return ESP_OK;
+    }
+    response_headers(req);
+    httpd_resp_set_type(req, "text/css; charset=utf-8");
+    return httpd_resp_send(req, (const char *)theme_start, theme_end - theme_start);
 }
 
 static const char *state_name(ota_state_t state)
@@ -119,7 +182,7 @@ static const char *state_name(ota_state_t state)
 
 static esp_err_t status_handler(httpd_req_t *req)
 {
-    if (!authorize(req, false)) {
+    if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
     network_status_t network;
@@ -132,12 +195,15 @@ static esp_err_t status_handler(httpd_req_t *req)
     bool ready = ota_manager_is_ready();
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
-        return error_response(req, "500 Internal Server Error", "Nicht genug Speicher fuer Status.");
+        return error_response(req, "500 Internal Server Error", "Not enough memory for status.");
     }
     bool ok =
         cJSON_AddStringToObject(root, "version", esp_app_get_description()->version) &&
         cJSON_AddStringToObject(root, "project", esp_app_get_description()->project_name) &&
         cJSON_AddStringToObject(root, "csrfToken", csrf_token) &&
+        cJSON_AddStringToObject(root, "tabOrder", CONFIG_OTA_SUITE_WEB_TAB_ORDER) &&
+        cJSON_AddStringToObject(root, "primaryTabs", CONFIG_OTA_SUITE_WEB_PRIMARY_TABS) &&
+        cJSON_AddStringToObject(root, "activityUrl", CONFIG_OTA_SUITE_WEB_ACTIVITY_URL) &&
         cJSON_AddStringToObject(root, "ssid", network.ssid) &&
         cJSON_AddStringToObject(root, "apSsid", network.ap_ssid) &&
         cJSON_AddStringToObject(root, "ip", network.ip) &&
@@ -163,10 +229,36 @@ static esp_err_t status_handler(httpd_req_t *req)
         cJSON_AddStringToObject(root, "updateMessage", update.message) &&
         cJSON_AddNumberToObject(root, "updateLastSuccess", update.last_success) &&
         cJSON_AddNumberToObject(root, "updateLastSuccessUptime", update.last_success_uptime);
+    cJSON *tabs = cJSON_CreateArray();
+    if (tabs == NULL) {
+        cJSON_Delete(root);
+        return error_response(req, "500 Internal Server Error", "Could not create UI tabs.");
+    }
+    for (size_t i = 0; ok && i < extension_count; ++i) {
+        cJSON *tab = cJSON_CreateObject();
+        if (tab == NULL ||
+            !cJSON_AddStringToObject(tab, "id", extensions[i]->id) ||
+            !cJSON_AddStringToObject(tab, "label", extensions[i]->label) ||
+            !cJSON_AddStringToObject(tab, "contentUrl", extension_asset_routes[i][0].uri) ||
+            !cJSON_AddStringToObject(tab, "scriptUrl", extension_asset_routes[i][1].uri) ||
+            !cJSON_AddStringToObject(tab, "placement",
+                                     extensions[i]->placement != NULL ? extensions[i]->placement : "tab") ||
+            !cJSON_AddItemToArray(tabs, tab)) {
+            cJSON_Delete(tab);
+            ok = false;
+            break;
+        }
+    }
+    if (ok && !cJSON_AddItemToObject(root, "tabs", tabs)) {
+        ok = false;
+    }
+    if (!ok) {
+        cJSON_Delete(tabs);
+    }
     char *json = ok ? cJSON_PrintUnformatted(root) : NULL;
     cJSON_Delete(root);
     if (json == NULL) {
-        return error_response(req, "500 Internal Server Error", "Status konnte nicht erstellt werden.");
+        return error_response(req, "500 Internal Server Error", "Could not create status.");
     }
     response_headers(req);
     httpd_resp_set_type(req, "application/json");
@@ -177,33 +269,33 @@ static esp_err_t status_handler(httpd_req_t *req)
 
 static esp_err_t network_handler(httpd_req_t *req)
 {
-    if (!authorize(req, true)) {
+    if (!web_interface_authorize_request(req, true)) {
         return ESP_OK;
     }
     if (ota_manager_is_busy()) {
-        return error_response(req, "409 Conflict", "WLAN kann waehrend OTA nicht geaendert werden.");
+        return error_response(req, "409 Conflict", "Wi-Fi cannot be changed during OTA.");
     }
     if (req->content_len == 0 || req->content_len >= 512) {
-        return error_response(req, "400 Bad Request", "Ungueltige Laenge der WLAN-Konfiguration.");
+        return error_response(req, "400 Bad Request", "Invalid Wi-Fi configuration length.");
     }
     char body[512];
     size_t received = 0;
     while (received < req->content_len) {
         int bytes = httpd_req_recv(req, body + received, req->content_len - received);
         if (bytes <= 0) {
-            return error_response(req, "408 Request Timeout", "WLAN-Anfrage unvollstaendig.");
+            return error_response(req, "408 Request Timeout", "Incomplete Wi-Fi request.");
         }
         received += bytes;
     }
     body[received] = '\0';
     if (strlen(body) != received || strstr(body, "\\u0000") != NULL) {
-        return error_response(req, "400 Bad Request", "Nullzeichen sind nicht erlaubt.");
+        return error_response(req, "400 Bad Request", "Null characters are not allowed.");
     }
     cJSON *json = cJSON_ParseWithLengthOpts(body, received + 1, NULL, true);
     memset(body, 0, sizeof(body));
     if (!cJSON_IsObject(json)) {
         cJSON_Delete(json);
-        return error_response(req, "400 Bad Request", "Ungueltiges JSON.");
+        return error_response(req, "400 Bad Request", "Invalid JSON.");
     }
     const cJSON *ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
     const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
@@ -217,48 +309,96 @@ static esp_err_t network_handler(httpd_req_t *req)
     cJSON_Delete(json);
     if (err != ESP_OK) {
         return error_response(req, err == ESP_ERR_INVALID_ARG ? "400 Bad Request" : "409 Conflict",
-                              "SSID: 1-32 Bytes; Passwort: leer, 8-63 Bytes oder 64 Hex-Zeichen. "
-                              "Es darf keine weitere Konfiguration laufen.");
+                              "SSID: 1–32 bytes; password: empty, 8–63 bytes or 64 hexadecimal characters. "
+                              "No other configuration may be running.");
     }
     response_headers(req);
     httpd_resp_set_status(req, "202 Accepted");
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "WLAN-Konfiguration angenommen; Speicher- und Verbindungsstatus beachten.");
+    return httpd_resp_sendstr(req, "Wi-Fi configuration accepted; check save and connection status.");
 }
 
 static esp_err_t ota_handler(httpd_req_t *req)
 {
-    if (!authorize(req, true)) {
+    if (!web_interface_authorize_request(req, true)) {
         return ESP_OK;
     }
     if (req->content_len != 0) {
-        return error_response(req, "400 Bad Request", "OTA-Start erwartet keinen Request-Body.");
+        return error_response(req, "400 Bad Request", "OTA start must have an empty request body.");
     }
     char version[32];
     if (httpd_req_get_hdr_value_str(req, "X-Update-Version", version, sizeof(version)) != ESP_OK ||
         ota_manager_start(version) != ESP_OK) {
         return error_response(req, "409 Conflict",
-                              "OTA nicht bereit: erlaubte Firmware-Adresse, WLAN, Startpruefung "
-                              "und bei HTTPS die Uhrzeit pruefen. Kandidat veraltet/geaendert? Updates erneut pruefen.");
+                              "OTA not ready: check allowed firmware URL, Wi-Fi, startup checks "
+                              "and the clock for HTTPS. Update candidate stale/changed? Check for updates again.");
     }
     response_headers(req);
     httpd_resp_set_status(req, "202 Accepted");
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Manuelles OTA-Update gestartet.");
+    return httpd_resp_sendstr(req, "Manual OTA update started.");
 }
 
 static esp_err_t check_handler(httpd_req_t *req)
 {
-    if (!authorize(req, true)) return ESP_OK;
+    if (!web_interface_authorize_request(req, true)) return ESP_OK;
     if (req->content_len != 0) {
-        return error_response(req, "400 Bad Request", "Update-Pruefung erwartet keinen Request-Body.");
+        return error_response(req, "400 Bad Request", "Update check must have an empty request body.");
     }
     if (ota_manager_is_busy() || update_check_start() != ESP_OK) {
-        return error_response(req, "409 Conflict", "Pruefung nicht bereit: WLAN/Uhrzeit/Manifest oder aktive OTA pruefen.");
+        return error_response(req, "409 Conflict", "Check not ready: check Wi-Fi/clock/manifest or active OTA.");
     }
     response_headers(req);
     httpd_resp_set_status(req, "202 Accepted");
-    return httpd_resp_sendstr(req, "Update-Pruefung gestartet. Keine automatische Installation.");
+    return httpd_resp_sendstr(req, "Update check started. No automatic installation.");
+}
+
+static esp_err_t extension_asset_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_request(req, false)) {
+        return ESP_OK;
+    }
+    const web_interface_extension_t *extension = req->user_ctx;
+    bool script = strstr(req->uri, "/script") != NULL;
+    const unsigned char *content = script ? extension->script : extension->content;
+    size_t size = script ? extension->script_size : extension->content_size;
+    if (content == NULL || size == 0) {
+        return error_response(req, "404 Not Found", "UI extension unavailable.");
+    }
+    response_headers(req);
+    httpd_resp_set_type(req, script ? "application/javascript; charset=utf-8" :
+                                      "text/html; charset=utf-8");
+    return httpd_resp_send(req, (const char *)content, size);
+}
+
+esp_err_t web_interface_register_extension(const web_interface_extension_t *extension)
+{
+    if (extension == NULL || extension->id == NULL || extension->label == NULL ||
+        extension->id[0] == '\0' || strlen(extension->id) > 16 ||
+        extension->label[0] == '\0' || strlen(extension->label) > 48 ||
+        extension->content == NULL || extension->content_size == 0 ||
+        extension->script == NULL || extension->script_size == 0 ||
+        (extension->route_count != 0 && extension->routes == NULL) ||
+        (extension->placement != NULL && strcmp(extension->placement, "tab") != 0 &&
+         strcmp(extension->placement, "settings") != 0) ||
+        extension_count >= sizeof(extensions) / sizeof(extensions[0])) {
+        ESP_LOGE(TAG, "Invalid or excessive UI extension registration");
+        return ESP_ERR_INVALID_ARG;
+    }
+    for (const unsigned char *p = (const unsigned char *)extension->id; *p; ++p) {
+        if (!( (*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9') || *p == '-')) {
+            ESP_LOGE(TAG, "UI extension ID must be lowercase alphanumeric/hyphen");
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    for (size_t i = 0; i < extension_count; ++i) {
+        if (strcmp(extensions[i]->id, extension->id) == 0) {
+            ESP_LOGE(TAG, "Duplicate UI extension: %s", extension->id);
+            return ESP_ERR_INVALID_STATE;
+        }
+    }
+    extensions[extension_count++] = extension;
+    return ESP_OK;
 }
 
 esp_err_t web_interface_start(void)
@@ -282,10 +422,12 @@ esp_err_t web_interface_start(void)
         snprintf(csrf_token + 2 * i, 3, "%02x", random[i]);
     }
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 8192;
+    config.stack_size = 12288;
     config.lru_purge_enable = true;
     config.recv_wait_timeout = 5;
     config.send_wait_timeout = 5;
+    /* Built-in routes plus two asset routes and the API routes of each extension. */
+    config.max_uri_handlers = 72;
     httpd_handle_t server = NULL;
     esp_err_t err = httpd_start(&server, &config);
     if (err != ESP_OK) {
@@ -295,7 +437,9 @@ esp_err_t web_interface_start(void)
     const httpd_uri_t routes[] = {
         {.uri = "/", .method = HTTP_GET, .handler = index_handler},
         {.uri = "/app.js", .method = HTTP_GET, .handler = script_handler},
+        {.uri = "/i18n.js", .method = HTTP_GET, .handler = language_handler},
         {.uri = "/bootstrap.min.css", .method = HTTP_GET, .handler = css_handler},
+        {.uri = "/app.css", .method = HTTP_GET, .handler = theme_handler},
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
         {.uri = "/api/network", .method = HTTP_POST, .handler = network_handler},
         {.uri = "/api/ota", .method = HTTP_POST, .handler = ota_handler},
@@ -310,6 +454,35 @@ esp_err_t web_interface_start(void)
                 ESP_LOGE(TAG, "HTTP cleanup failed: %s", esp_err_to_name(stopped));
             }
             return err;
+        }
+    }
+    for (size_t i = 0; i < extension_count; ++i) {
+        snprintf(extension_asset_paths[i][0], sizeof(extension_asset_paths[i][0]),
+                 "/ui/%s/content", extensions[i]->id);
+        snprintf(extension_asset_paths[i][1], sizeof(extension_asset_paths[i][1]),
+                 "/ui/%s/script", extensions[i]->id);
+        extension_asset_routes[i][0] = (httpd_uri_t){
+            .uri = extension_asset_paths[i][0], .method = HTTP_GET, .handler = extension_asset_handler,
+            .user_ctx = (void *)extensions[i]};
+        extension_asset_routes[i][1] = (httpd_uri_t){
+            .uri = extension_asset_paths[i][1], .method = HTTP_GET, .handler = extension_asset_handler,
+            .user_ctx = (void *)extensions[i]};
+        for (size_t route = 0; route < 2; ++route) {
+            err = httpd_register_uri_handler(server, &extension_asset_routes[i][route]);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Cannot register UI extension route: %s", esp_err_to_name(err));
+                httpd_stop(server);
+                return err;
+            }
+        }
+        for (size_t route = 0; route < extensions[i]->route_count; ++route) {
+            err = httpd_register_uri_handler(server, &extensions[i]->routes[route]);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Cannot register extension API %s: %s",
+                         extensions[i]->routes[route].uri, esp_err_to_name(err));
+                httpd_stop(server);
+                return err;
+            }
         }
     }
     ESP_LOGI(TAG, "Local web interface started; OTA remains idle");

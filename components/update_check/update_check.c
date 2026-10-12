@@ -108,7 +108,7 @@ static void check_worker(void *arg)
         if (!status.checking && status.configured && !installing && connected && due) {
             status.checking = true;
             status.available = false;
-            strlcpy(status.message, "Update-Pruefung laeuft.", sizeof(status.message));
+            strlcpy(status.message, "Checking for updates.", sizeof(status.message));
         }
         bool run = status.checking;
         if (run) {
@@ -133,11 +133,11 @@ static void check_worker(void *arg)
             strlcpy(status.notes, next.notes, sizeof(status.notes));
             status.stale = false;
             status.available = update_version_newer(next.version, esp_app_get_description()->version);
-            strlcpy(status.message, status.available ? "Neue Firmware verfuegbar. Installation nur manuell." :
-                    "Keine neuere Firmware verfuegbar.", sizeof(status.message));
+            strlcpy(status.message, status.available ? "New firmware available. Manual installation only." :
+                    "No newer firmware available.", sizeof(status.message));
         } else {
             status.stale = checked_at != 0;
-            snprintf(status.message, sizeof(status.message), "Update-Pruefung fehlgeschlagen: %s. Erneut pruefen.",
+            snprintf(status.message, sizeof(status.message), "Update check failed: %s. Please retry.",
                      esp_err_to_name(err));
         }
         portEXIT_CRITICAL(&lock);
@@ -147,8 +147,8 @@ static void check_worker(void *arg)
 esp_err_t update_check_init(void)
 {
     status.configured = update_manifest_url_valid(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, http_allowed());
-    strlcpy(status.message, status.configured ? "Noch keine Update-Pruefung." :
-            "Manifest-Adresse ungueltig oder HTTP nicht erlaubt.", sizeof(status.message));
+    strlcpy(status.message, status.configured ? "No update check yet." :
+            "Invalid manifest URL or HTTP not allowed.", sizeof(status.message));
     return xTaskCreate(check_worker, "update_check", 8192, NULL, 3, &worker) == pdPASS ?
            ESP_OK : ESP_ERR_NO_MEM;
 }
@@ -176,7 +176,7 @@ void update_check_get_status(update_check_status_t *out)
     if (checked_at && esp_timer_get_time() - checked_at >= CHECK_INTERVAL_US) {
         out->stale = true;
         out->available = false;
-        strlcpy(out->message, "Kandidat veraltet. Updates erneut pruefen.", sizeof(out->message));
+        strlcpy(out->message, "Update candidate is stale. Check for updates again.", sizeof(out->message));
     }
     portEXIT_CRITICAL(&lock);
 }
@@ -201,6 +201,6 @@ void update_check_release(void)
     installing = false;
     status.available = false;
     status.stale = true;
-    strlcpy(status.message, "Nach OTA-Versuch Updates erneut pruefen.", sizeof(status.message));
+    strlcpy(status.message, "Check for updates again after the OTA attempt.", sizeof(status.message));
     portEXIT_CRITICAL(&lock);
 }

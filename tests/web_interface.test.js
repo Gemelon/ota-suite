@@ -5,8 +5,14 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { TextEncoder } = require("node:util");
 
-const script = fs.readFileSync(path.join(__dirname,
-  "..", "components", "web_interface", "assets", "app.js"), "utf8");
+const assets = path.join(__dirname, "..", "components", "web_interface", "assets");
+const script = fs.readFileSync(path.join(assets, "app.js"), "utf8");
+const languageScript = fs.readFileSync(path.join(assets, "i18n.js"), "utf8");
+const languages = {
+  en: JSON.parse(fs.readFileSync(path.join(assets, "en.json"), "utf8")),
+  de: JSON.parse(fs.readFileSync(path.join(assets, "de.json"), "utf8")),
+  sdEnabled: false,
+};
 
 const readyStatus = {
   version: "1.0", project: "ota_suite_demo", csrfToken: "test-token",
@@ -34,15 +40,27 @@ function createPage(status = readyStatus, confirmResult = true) {
     if (!elements.has(id)) {
       elements.set(id, {
         value: "", disabled: true, textContent: "", className: "",
-        classList: { add() {} }, listeners: {},
+        classList: { add() {}, remove() {}, toggle() {} }, listeners: {},
+        querySelector() { return {}; },
+        querySelectorAll() { return []; },
+        setAttribute(name, value) { this[name] = value; },
+        append() {},
+        replaceChildren() {},
         addEventListener(name, listener) { this.listeners[name] = listener; },
         removeAttribute(name) { delete this[name]; },
       });
     }
     return elements.get(id);
   };
-  vm.runInNewContext(script, {
-    document: { getElementById: element },
+  const context = {
+    document: {
+      getElementById: element, querySelectorAll: () => [],
+      documentElement: {}, createElement: () => ({}),
+    },
+    navigator: { language: "de" },
+    localStorage: { getItem: () => "de" },
+    EBCLanguages: languages,
+    console,
     TextEncoder, AbortSignal: { timeout: () => undefined },
     confirm: (message) => { confirmations.push(message); return confirmResult; },
     setTimeout: (callback) => timers.push(callback),
@@ -60,7 +78,11 @@ function createPage(status = readyStatus, confirmResult = true) {
       }
       return { ok: !actionError, text: async () => actionError || "Angenommen." };
     },
-  });
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(languageScript, context);
+  vm.runInContext(script, context);
   return {
     element, requests, confirmations,
     async settle() { await new Promise(setImmediate); },

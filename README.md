@@ -6,6 +6,17 @@ starter, an optional WS2812 status LED, a firmware publication script, and an
 ESP32-S3 starter application. It is self-contained and independent of other
 application checkouts.
 
+## Repository and licensing
+
+Clone `https://github.com/Gemelon/ota-suite.git`. This repository is currently
+private. No license has yet been granted for its original source code.
+Bootstrap CSS retains its MIT license and bundled copyright notice; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Local `sdkconfig`, credentials, editor settings and generated build files
+must not be committed. Set deployment URLs/passwords in the consuming
+application's local configuration or at runtime, not in shared defaults.
+
 ## Contents
 
 | Path | Purpose |
@@ -37,7 +48,9 @@ HTTPS manifest before deployment. For local HTTP-only testing, explicitly
 enable **OTA Suite firmware updates → Allow unencrypted HTTP OTA**; use only a
 trusted test network.
 
-The setup AP name starts with `OTASuite-`. A random admin/AP password is
+The setup AP name uses the configurable
+**OTA Suite network → Setup access point SSID prefix** (default `OTASuite-`)
+plus the last three Wi-Fi MAC bytes. A random admin/AP password is
 generated and stored when no configured password is provided, and is printed
 to the serial log for first setup. Connect to that AP and open
 `http://192.168.4.1`; the login is `admin` with the AP password. HTTP Basic
@@ -50,6 +63,22 @@ the board before use. The default GPIO is a common ESP32-S3 DevKitC-1 value,
 not a universal board setting.
 
 ## Integrate in an existing application
+
+The shared web UI includes an English/German language selector with English
+fallback. Catalogs are in `components/web_interface/assets/en.json` and
+`de.json`; static texts use `data-i18n`, dynamic texts use `I18n.t/f`, and
+firmware protocol messages use `I18n.message` at display points. Apply
+`I18n.apply(pane)` before loading an extension script. Never pass user names,
+notes or JSON API payloads through message translation.
+
+SD language files are optional and disabled by default, so the starter remains
+self-contained. A consuming application may enable
+`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES` and register authenticated
+`GET /api/i18n/languages` (language metadata/errors) and
+`GET /api/i18n/language?code=...` (version-1 JSON catalog) endpoints before
+`device_app_start()`. EBCTester provides this adapter with shared SD locking.
+Changing language reloads the page after confirmation; it does not issue
+device commands.
 
 Add/copy the components directory to the project or add it to
 `EXTRA_COMPONENT_DIRS`; ensure ESP-IDF component-manager manifests are
@@ -84,6 +113,23 @@ component's `include` directory and preserve the initialization order in
 by the authenticated web UI after a user confirms the offered version; update
 availability checks never download or install an image.
 
+Applications can add UI tabs with `web_interface_register_extension()` before
+`web_interface_start()`. `CONFIG_OTA_SUITE_WEB_TAB_ORDER` sets the tab order as
+comma-separated ids (built-in: `overview`, `updates`, `settings`); unlisted tabs
+are appended and the first listed tab opens on page load. Set the extension's
+`placement` to `"settings"` to render it as a card inside the settings tab
+instead of its own tab (`NULL`/`"tab"` keeps the separate tab). Up to 8
+extensions can be registered; the HTTP server allows 72 URI handlers in total.
+
+The browser title and header use the application project name from the firmware
+description. `CONFIG_OTA_SUITE_WEB_PRIMARY_TABS` optionally groups tab ids under
+**Batterietester**, with remaining tabs under **Verwaltung**; an empty value
+keeps a single tab bar. `CONFIG_OTA_SUITE_WEB_ACTIVITY_URL` optionally selects a
+same-origin status endpoint returning `link.connected`, `link.framesOk`,
+`link.framesBad` and `link.ageMs`. The header RX indicator polls it every 500 ms
+while the page is visible and toggles for new valid frames. Styles and SVG
+icons are local assets, requiring no CDN.
+
 ## Release publishing (explicit only)
 
 The publisher is a standalone CMake script and is **not attached to the
@@ -99,8 +145,15 @@ cmake "-DSOURCE_FILE=examples\esp32s3-starter\build\ota_suite_starter.bin" `
   "-DFIRMWARE_PROJECT=ota_suite_starter" `
   "-DFIRMWARE_TARGET=esp32s3" `
   "-DFIRMWARE_ORIGIN=https://updates.example.org" `
+  "-DFIRMWARE_URL_PATH=/my-device" `
   -P cmake\publish_firmware.cmake
 ```
+
+`FIRMWARE_ORIGIN` specifies only protocol, host and optional port.
+`FIRMWARE_URL_PATH` is an optional web directory such as `/my-device` or
+`/esp/my-device`, without a trailing slash; omit it for the web root.
+It is independent of the local `DESTINATION_DIR`. Configure the device manifest
+URL with the same web directory, e.g. `https://updates.example.org/my-device/firmware.json`.
 
 Publishing explicitly copies and verifies the actual `.bin`, refuses to
 replace an immutable version with different bytes, updates a compatibility

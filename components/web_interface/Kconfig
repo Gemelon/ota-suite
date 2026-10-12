@@ -1,0 +1,29 @@
+menu "OTA Suite web interface"
+    config OTA_SUITE_WEB_SD_LANGUAGES
+        bool "Enable optional SD language provider"
+        default n
+        help
+            The consuming application must register authenticated
+            /api/i18n/languages and /api/i18n/language endpoints before startup.
+            Without this option the built-in English and German UI is standalone.
+    config OTA_SUITE_WEB_PRIMARY_TABS
+        string "Tabs in the primary navigation section (empty disables sections)"
+        default ""
+        help
+            Comma-separated tab ids for the Batterietester section.
+            Other tabs appear under Verwaltung.
+    config OTA_SUITE_WEB_ACTIVITY_URL
+        string "Optional frame status endpoint for the header activity LED"
+        default ""
+        help
+            Same-origin endpoint returning link.connected, link.framesOk and
+            link.ageMs. Empty disables the activity indicator.
+    config OTA_SUITE_WEB_TAB_ORDER
+        string "Web interface tab order"
+        default "overview,updates,settings"
+        help
+            Comma-separated tab ids in display order. Built-in tabs are
+            overview, updates and settings; extension tabs use their registered
+            id (for example sd-card). Unlisted tabs are appended. The first
+            listed tab is opened when the page loads.
+endmenu

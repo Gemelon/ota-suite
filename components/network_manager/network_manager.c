@@ -41,7 +41,7 @@ static void set_message(const char *message)
 static void connection_error(esp_err_t err)
 {
     char message[128];
-    snprintf(message, sizeof(message), "WLAN-Fehler: %s. Access Point bleibt erreichbar.",
+    snprintf(message, sizeof(message), "Wi-Fi error: %s. Access point remains accessible.",
              esp_err_to_name(err));
     set_message(message);
     ESP_LOGE(TAG, "%s", message);
@@ -87,7 +87,7 @@ static void network_event(void *arg, esp_event_base_t base, int32_t id, void *da
         connecting = false;
         status.ip[0] = '\0';
         portEXIT_CRITICAL(&lock);
-        set_message("WLAN getrennt. Verbindung wird erneut versucht; Access Point bleibt erreichbar.");
+        set_message("Wi-Fi disconnected. Reconnecting; access point remains accessible.");
         ESP_LOGW(TAG, "Station disconnected");
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         const ip_event_got_ip_t *event = data;
@@ -98,7 +98,7 @@ static void network_event(void *arg, esp_event_base_t base, int32_t id, void *da
         connecting = false;
         strlcpy(status.ip, ip, sizeof(status.ip));
         portEXIT_CRITICAL(&lock);
-        set_message("WLAN verbunden.");
+        set_message("Wi-Fi connected.");
         ESP_LOGI(TAG, "Web interface: http://%s", ip);
         esp_err_t err = esp_netif_sntp_start();
         if (err != ESP_OK) {
@@ -150,7 +150,7 @@ static void network_worker(void *arg)
                     connecting = false;
                     status.ip[0] = '\0';
                     portEXIT_CRITICAL(&lock);
-                    set_message("WLAN gespeichert. Verbindung wird hergestellt.");
+                    set_message("Wi-Fi saved. Connecting.");
                     connect_station();
                 }
             }
@@ -245,7 +245,8 @@ esp_err_t network_manager_init(void)
 
     uint8_t mac[6];
     ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP));
-    snprintf(status.ap_ssid, sizeof(status.ap_ssid), "OTASuite-%02X%02X%02X",
+    snprintf(status.ap_ssid, sizeof(status.ap_ssid), "%s-%02X%02X%02X",
+             CONFIG_OTA_SUITE_AP_SSID_PREFIX,
              mac[3], mac[4], mac[5]);
     strlcpy(status.ssid, credentials.ssid, sizeof(status.ssid));
     wifi_config_t ap = {0};
@@ -279,8 +280,8 @@ esp_err_t network_manager_init(void)
     }
     ESP_LOGI(TAG, "Setup AP: %s / password: %s", status.ap_ssid, admin_password);
     ESP_LOGI(TAG, "Open http://192.168.4.1; web login: admin / AP password");
-    set_message(has_credentials ? "Gespeichertes WLAN wird verbunden." :
-                "Noch kein WLAN eingerichtet. Bitte Zugangsdaten speichern.");
+    set_message(has_credentials ? "Connecting to saved Wi-Fi." :
+                "No Wi-Fi configured yet. Please save credentials.");
     return ESP_OK;
 }
 

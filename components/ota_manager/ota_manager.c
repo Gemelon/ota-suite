@@ -134,7 +134,7 @@ static void perform_update(void)
     esp_ota_handle_t handle = 0;
     bool begun = false;
     psa_hash_operation_t hash = PSA_HASH_OPERATION_INIT;
-    const char *stage = "Firmware-Download fehlgeschlagen";
+    const char *stage = "Firmware download failed";
     int64_t started = esp_timer_get_time();
     esp_err_t err = client ? esp_http_client_open(client, 0) : ESP_ERR_NO_MEM;
     if (err != ESP_OK) goto cleanup;
@@ -182,7 +182,7 @@ static void perform_update(void)
         portEXIT_CRITICAL(&lock);
         vTaskDelay(pdMS_TO_TICKS(1));
     }
-    stage = "Firmware-Groesse oder SHA256 stimmt nicht mit Manifest ueberein";
+    stage = "Firmware size or SHA256 does not match the manifest";
     unsigned char digest[32];
     size_t digest_length = 0;
     if (received != selected.size || !esp_http_client_is_complete_data_received(client) ||
@@ -191,8 +191,8 @@ static void perform_update(void)
         err = ESP_ERR_OTA_VALIDATE_FAILED;
         goto cleanup;
     }
-    set_state(OTA_VERIFYING, "Firmware wird geprueft. Bitte Stromversorgung nicht trennen.");
-    stage = "Firmware-Pruefung fehlgeschlagen";
+    set_state(OTA_VERIFYING, "Verifying firmware. Do not disconnect power.");
+    stage = "Firmware verification failed";
     esp_app_desc_t image;
     err = esp_ota_get_partition_description(next, &image);
     if (err == ESP_OK) err = validate_image(&image);
@@ -209,7 +209,7 @@ cleanup:
         esp_http_client_cleanup(client);
     }
     if (err != ESP_OK) { fail_update(stage, err); return; }
-    set_state(OTA_REBOOTING, "Update erfolgreich. Neustart; danach erfolgt die Startpruefung.");
+    set_state(OTA_REBOOTING, "Update successful. Restarting, then performing startup checks.");
     ESP_LOGI(TAG, "Firmware verified; restarting");
     vTaskDelay(pdMS_TO_TICKS(3000));
     esp_restart();
@@ -230,8 +230,8 @@ esp_err_t ota_manager_init(void)
     status.insecure_http = status.configured &&
                            strncmp(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, "http://", 7) == 0;
     strlcpy(status.message, status.configured ?
-            "OTA startet ausschliesslich per Button. Startpruefung laeuft." :
-            "OTA deaktiviert: HTTPS-Adresse oder ausdruecklich erlaubte HTTP-Adresse konfigurieren.",
+            "OTA starts only via the button. Startup checks in progress." :
+            "OTA disabled: configure an HTTPS URL or explicitly allowed HTTP URL.",
             sizeof(status.message));
     if (!status.configured) {
         ESP_LOGE(TAG, "Configured OTA URL is invalid or HTTP is not explicitly allowed");
@@ -269,7 +269,7 @@ esp_err_t ota_manager_confirm_boot(void)
     portENTER_CRITICAL(&lock);
     status.boot_confirmed = true;
     if (status.configured) {
-        strlcpy(status.message, "Bereit. OTA startet nur nach Klick auf Update starten.",
+        strlcpy(status.message, "Ready. OTA starts only after clicking Start update.",
                 sizeof(status.message));
     }
     portEXIT_CRITICAL(&lock);
@@ -287,8 +287,8 @@ esp_err_t ota_manager_start(const char *expected_version)
         status.bytes_read = 0;
         status.total_bytes = 0;
         strlcpy(status.message, status.insecure_http ?
-                "HTTP-Testdownload gestartet (unverschluesselt). Stromversorgung nicht trennen." :
-                "HTTPS-Download gestartet. Bitte Stromversorgung nicht trennen.",
+                "HTTP test download started (unencrypted). Do not disconnect power." :
+                "HTTPS download started. Do not disconnect power.",
                 sizeof(status.message));
     }
     portEXIT_CRITICAL(&lock);
@@ -298,7 +298,7 @@ esp_err_t ota_manager_start(const char *expected_version)
     }
     esp_err_t err = update_check_acquire(expected_version, &selected);
     if (err != ESP_OK) {
-        set_state(OTA_FAILED, "Kandidat fehlt oder ist veraltet/geaendert. Updates erneut pruefen.");
+        set_state(OTA_FAILED, "Update candidate missing, stale or changed. Check for updates again.");
         return err;
     }
     xTaskNotifyGive(worker);

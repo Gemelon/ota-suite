@@ -1,86 +1,139 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OTA Suite</title>
+  <title>Firmware</title>
   <link href="/bootstrap.min.css" rel="stylesheet">
+  <link href="/app.css" rel="stylesheet">
+  <script src="/i18n.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body class="bg-body-tertiary">
-  <main class="container py-4">
-    <h1 class="mb-1">OTA Suite</h1>
-    <p class="text-body-secondary">WLAN-Einrichtung und manuelles Firmware-Update</p>
+  <header class="app-header mb-4">
+    <div class="container py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <a class="app-brand" href="/" id="app-brand">Firmware</a>
+      <nav id="section-menu" class="d-none d-flex flex-wrap gap-2" aria-label="Bereiche" data-i18n-attrs="aria-label:text.7b40d8db4ebc">
+        <button class="section-button" type="button" data-section="primary"><span data-i18n="text.1fd7e1d51569">Batterietester</span></button>
+        <button class="section-button" type="button" data-section="administration"><span data-i18n="text.2456bb8ed72f">Verwaltung</span></button>
+      </nav>
+      <div id="frame-indicator" class="d-none d-flex align-items-center gap-2" title="Keine Verbindung zum Tester" data-i18n-attrs="title:text.d1598d77449c">
+        <span id="frame-led" class="frame-led" aria-hidden="true"></span>
+        <span id="frame-label" class="small"><span data-i18n="text.ecbc52cf53bc">EBC getrennt</span></span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label for="language-select" class="small" data-i18n="language.title">Language</label>
+        <select id="language-select" class="form-select form-select-sm w-auto" disabled aria-label="Language"
+                data-i18n-attrs="aria-label:language.title">
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  <main class="container pb-4">
+    <div id="language-error" class="alert alert-warning d-none" role="alert"></div>
+    <div class="page-heading rounded-3 p-3 mb-4">
+      <h1 id="page-title" class="h3 mb-1">Firmware</h1>
+      <p id="page-subtitle" class="mb-0"><span data-i18n="text.1f86784e2822">Status, Speicher, Firmware und Einstellungen</span></p>
+    </div>
     <div id="connection-error" class="alert alert-danger d-none" role="alert"></div>
     <div id="action-result" class="alert alert-info d-none" role="status"></div>
-    <div class="row g-4">
-      <section class="col-lg-6" aria-labelledby="info-title">
+    <ul id="web-tabs" class="nav nav-tabs mb-4" role="tablist">
+      <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-button-overview"
+          type="button" role="tab" aria-selected="true" data-tab-target="overview"><span data-i18n="text.f30fd7e2dff0">Ger&auml;teinformation</span></button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" id="tab-button-updates"
+          type="button" role="tab" aria-selected="false" data-tab-target="updates">Updates</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" id="tab-button-settings"
+          type="button" role="tab" aria-selected="false" data-tab-target="settings"><span data-i18n="text.f5750a5d7231">Einstellungen</span></button></li>
+    </ul>
+    <section id="tab-overview" class="tab-pane" role="tabpanel" aria-labelledby="tab-button-overview">
+      <div class="row g-4">
+      <section class="col-lg-8" aria-labelledby="info-title">
         <div class="card h-100">
           <div class="card-body">
-            <h2 id="info-title" class="h4">Geraeteinformation</h2>
+            <h2 id="info-title" class="h4"><span data-i18n="text.f30fd7e2dff0">Ger&auml;teinformation</span></h2>
             <dl class="row mb-0">
-              <dt class="col-sm-5">Firmware</dt><dd id="version" class="col-sm-7">Wird geladen...</dd>
-              <dt class="col-sm-5">Projekt</dt><dd id="project" class="col-sm-7">-</dd>
-              <dt class="col-sm-5">WLAN</dt><dd id="network" class="col-sm-7">-</dd>
-              <dt class="col-sm-5">WLAN-IP</dt><dd id="ip" class="col-sm-7">-</dd>
-              <dt class="col-sm-5">Einrichtungs-AP</dt><dd id="ap-ssid" class="col-sm-7">-</dd>
-              <dt class="col-sm-5">AP-Adresse</dt><dd class="col-sm-7">http://192.168.4.1</dd>
-              <dt class="col-sm-5">HTTPS-Uhrzeit</dt><dd id="time" class="col-sm-7">-</dd>
+              <dt class="col-sm-5">Firmware</dt><dd id="version" class="col-sm-7"><span data-i18n="text.bfa2bbcc654e">Wird geladen...</span></dd>
+              <dt class="col-sm-5"><span data-i18n="text.40ebf93af8d4">Projekt</span></dt><dd id="project" class="col-sm-7">-</dd>
+              <dt class="col-sm-5"><span data-i18n="text.9d93ae059691">WLAN</span></dt><dd id="network" class="col-sm-7">-</dd>
+              <dt class="col-sm-5"><span data-i18n="text.ba9090356d8e">WLAN-IP</span></dt><dd id="ip" class="col-sm-7">-</dd>
+              <dt class="col-sm-5"><span data-i18n="text.fd26a0e280d1">Einrichtungs-AP</span></dt><dd id="ap-ssid" class="col-sm-7">-</dd>
+              <dt class="col-sm-5"><span data-i18n="text.0b26f0c8f318">AP-Adresse</span></dt><dd class="col-sm-7">http://192.168.4.1</dd>
+              <dt class="col-sm-5"><span data-i18n="text.21cb8923f025">HTTPS-Uhrzeit</span></dt><dd id="time" class="col-sm-7">-</dd>
             </dl>
           </div>
         </div>
       </section>
-      <section class="col-lg-6" aria-labelledby="ota-title">
+      <section class="col-lg-4" aria-labelledby="overview-status-title">
+        <div class="card h-100"><div class="card-body">
+          <h2 id="overview-status-title" class="h4"><span data-i18n="text.8d5cb1ee2270">Systemstatus</span></h2>
+          <p><span class="badge text-bg-secondary">OTA</span><span data-i18n="text.a7b8317a7d6a"> Updates werden ausschliesslich manuell installiert.</span></p>
+          <p id="network-message" class="text-body-secondary" role="status"></p>
+          <button class="btn btn-outline-primary" type="button" data-tab-target="updates"><span data-i18n="text.c134aa2f0e3d">Zu Updates</span></button>
+        </div></div>
+      </section>
+      </div>
+    </section>
+    <section id="tab-updates" class="tab-pane d-none" role="tabpanel" aria-labelledby="tab-button-updates">
+      <div class="row g-4">
+      <section class="col-12" aria-labelledby="ota-title">
         <div class="card h-100">
           <div class="card-body">
-            <h2 id="ota-title" class="h4">Firmware-Update (OTA)</h2>
-            <p class="text-body-secondary">Verfuegbarkeit wird nach WLAN-Verbindung und alle sechs Stunden
-              geprueft. Keine automatische Installation: die Firmware wird erst nach Bestaetigung geladen.</p>
-            <div id="update-message" class="alert alert-info" role="status">Noch keine Pruefung.</div>
+            <h2 id="ota-title" class="h4"><span data-i18n="text.b505d8ee989e">Firmware-Update (OTA)</span></h2>
+            <p class="text-body-secondary"><span data-i18n="text.29c229fbca06">Verfuegbarkeit wird nach WLAN-Verbindung und alle sechs Stunden
+              geprueft. Keine automatische Installation: die Firmware wird erst nach Bestaetigung geladen.</span></p>
+            <div id="update-message" class="alert alert-info" role="status"><span data-i18n="text.e99caf70a683">Noch keine Pruefung.</span></div>
             <p id="update-version"></p>
             <p id="update-notes" class="text-break"></p>
             <p id="update-last-success" class="small"></p>
-            <button id="update-check" class="btn btn-outline-primary mb-3" type="button" disabled>Updates pruefen</button>
+            <button id="update-check" class="btn btn-outline-primary mb-3" type="button" disabled><span data-i18n="text.f9455fc46c96">Updates pruefen</span></button>
             <div id="ota-transport-warning" class="alert alert-warning d-none" role="alert"></div>
-            <div id="ota-message" class="alert alert-info" role="status">Status wird geladen...</div>
+            <div id="ota-message" class="alert alert-info" role="status"><span data-i18n="text.64644e4d08ab">Status wird geladen...</span></div>
             <p id="ota-requirement" class="small"></p>
-            <label for="ota-progress" class="form-label">Download-Fortschritt</label>
+            <label for="ota-progress" class="form-label"><span data-i18n="text.e6ec88efb77b">Download-Fortschritt</span></label>
             <progress id="ota-progress" class="w-100" max="100" value="0">0%</progress>
-            <p id="ota-bytes" class="small text-body-secondary">Noch kein Update gestartet.</p>
-            <div class="alert alert-warning">Waehrend des Updates die Stromversorgung nicht trennen.
-              Nach erfolgreicher Pruefung startet das Geraet neu.</div>
-            <button id="ota-start" class="btn btn-primary" type="button" disabled>Update starten</button>
+            <p id="ota-bytes" class="small text-body-secondary"><span data-i18n="text.6ebd8efd4522">Noch kein Update gestartet.</span></p>
+            <div class="alert alert-warning"><span data-i18n="text.f95b83c6335d">Waehrend des Updates die Stromversorgung nicht trennen.
+              Nach erfolgreicher Pruefung startet das Geraet neu.</span></div>
+            <button id="ota-start" class="btn btn-primary" type="button" disabled><span data-i18n="text.cbcb1a2afab9">Update starten</span></button>
           </div>
         </div>
       </section>
+      </div>
+    </section>
+    <section id="tab-settings" class="tab-pane d-none" role="tabpanel" aria-labelledby="tab-button-settings">
+      <div class="row g-4">
       <section class="col-12" aria-labelledby="wifi-title">
         <div class="card">
           <div class="card-body">
-            <h2 id="wifi-title" class="h4">WLAN einrichten</h2>
-            <p>Verbinden Sie das Geraet mit einem WLAN mit Internetzugang.
-              Der geschuetzte Einrichtungs-Access-Point bleibt als Rueckweg aktiv.</p>
-            <p id="network-message" class="text-body-secondary" role="status"></p>
+            <h2 id="wifi-title" class="h4"><span data-i18n="text.47d049be51ad">WLAN einrichten</span></h2>
+            <p><span data-i18n="text.8bf6bd61d81f">Verbinden Sie das Geraet mit einem WLAN mit Internetzugang.
+              Der geschuetzte Einrichtungs-Access-Point bleibt als Rueckweg aktiv.</span></p>
             <form id="wifi-form" class="row g-3">
               <div class="col-md-5">
-                <label for="ssid" class="form-label">WLAN-Name (SSID)</label>
+                <label for="ssid" class="form-label"><span data-i18n="text.a181f1958695">WLAN-Name (SSID)</span></label>
                 <input id="ssid" class="form-control" name="ssid" maxlength="32" required autocomplete="off">
               </div>
               <div class="col-md-5">
-                <label for="password" class="form-label">WLAN-Passwort</label>
+                <label for="password" class="form-label"><span data-i18n="text.51a8d3838637">WLAN-Passwort</span></label>
                 <input id="password" class="form-control" name="password" type="password"
                        maxlength="64" autocomplete="new-password">
-                <div class="form-text">Leer fuer offenes WLAN; sonst 8-63 Bytes oder 64 Hex-Zeichen.</div>
+                <div class="form-text"><span data-i18n="text.456a7933f97e">Leer fuer offenes WLAN; sonst 8-63 Bytes oder 64 Hex-Zeichen.</span></div>
               </div>
               <div class="col-md-2 d-flex align-items-start pt-md-4">
-                <button id="wifi-save" class="btn btn-primary mt-md-2" type="submit" disabled>Speichern</button>
+                <button id="wifi-save" class="btn btn-primary mt-md-2" type="submit" disabled><span data-i18n="text.f6b2ff39f540">Speichern</span></button>
               </div>
             </form>
-            <p class="small mt-3 mb-0">Beim Wechsel des WLAN-Kanals kann die AP-Verbindung kurz abbrechen.
-              Danach ggf. erneut mit dem Access Point verbinden. Zugangsdaten werden im Geraet gespeichert.</p>
+            <p class="small mt-3 mb-0"><span data-i18n="text.49b792f6ef59">Beim Wechsel des WLAN-Kanals kann die AP-Verbindung kurz abbrechen.
+              Danach ggf. erneut mit dem Access Point verbinden. Zugangsdaten werden im Geraet gespeichert.</span></p>
           </div>
         </div>
       </section>
-    </div>
+      </div>
+      <div id="settings-extensions"></div>
+    </section>
+    <div id="extension-panes"></div>
   </main>
 </body>
 </html>

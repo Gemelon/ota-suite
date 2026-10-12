@@ -11,6 +11,13 @@ if(NOT FIRMWARE_VERSION MATCHES "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0
     message(FATAL_ERROR "Invalid publication metadata")
 endif()
 
+if(NOT DEFINED FIRMWARE_URL_PATH)
+    set(FIRMWARE_URL_PATH "")
+endif()
+if(NOT FIRMWARE_URL_PATH MATCHES "^(/[A-Za-z0-9_-]+)*$")
+    message(FATAL_ERROR "Invalid FIRMWARE_URL_PATH; use empty or /directory/subdirectory without trailing slash")
+endif()
+
 file(SHA256 "${SOURCE_FILE}" source_hash)
 file(SIZE "${SOURCE_FILE}" source_size)
 set(versioned_name "${FIRMWARE_PROJECT}-${FIRMWARE_VERSION}.bin")
@@ -50,7 +57,7 @@ endif()
 copy_verified("${DESTINATION_DIR}${FIRMWARE_PROJECT}.bin")
 set(manifest "${DESTINATION_DIR}firmware.json")
 file(WRITE "${manifest}.uploading"
-    "{\n  \"project\": \"${FIRMWARE_PROJECT}\",\n  \"target\": \"${FIRMWARE_TARGET}\",\n  \"version\": \"${FIRMWARE_VERSION}\",\n  \"url\": \"${FIRMWARE_ORIGIN}/${versioned_name}\",\n  \"size\": ${source_size},\n  \"sha256\": \"${source_hash}\",\n  \"notes\": \"Manifest-based update availability; manual installation only.\"\n}\n")
+    "{\n  \"project\": \"${FIRMWARE_PROJECT}\",\n  \"target\": \"${FIRMWARE_TARGET}\",\n  \"version\": \"${FIRMWARE_VERSION}\",\n  \"url\": \"${FIRMWARE_ORIGIN}${FIRMWARE_URL_PATH}/${versioned_name}\",\n  \"size\": ${source_size},\n  \"sha256\": \"${source_hash}\",\n  \"notes\": \"Manifest-based update availability; manual installation only.\"\n}\n")
 file(RENAME "${manifest}.uploading" "${manifest}" RESULT result)
 if(NOT result STREQUAL "0")
     file(REMOVE "${manifest}.uploading")

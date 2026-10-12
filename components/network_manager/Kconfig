@@ -1,4 +1,10 @@
 menu "OTA Suite network"
+    config OTA_SUITE_AP_SSID_PREFIX
+        string "Setup access point SSID prefix"
+        default "OTASuite"
+        help
+            The full setup AP name appends a hyphen and the last three Wi-Fi MAC
+            bytes. Keep the resulting SSID within the 32-byte Wi-Fi limit.
     config OTA_SUITE_AP_PASSWORD
         string "Access point / web admin password (empty: generate and store)"
         default ""
