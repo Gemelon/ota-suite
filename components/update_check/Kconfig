@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 menu "OTA Suite update checks"
     config OTA_SUITE_UPDATE_MANIFEST_URL
         string "Fixed firmware manifest URL"

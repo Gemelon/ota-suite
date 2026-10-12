@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 :root { --bs-primary: #23765a; --bs-primary-rgb: 35,118,90; }
 .app-header { background: #193f33; color: #fff; box-shadow: 0 2px 10px #193f3326; }
 .app-brand { color: #fff; font-size: 1.5rem; font-weight: 700; text-decoration: none; }

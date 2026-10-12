@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 if(NOT EXISTS "${SOURCE_FILE}" OR IS_DIRECTORY "${SOURCE_FILE}")
     message(FATAL_ERROR "Firmware binary is missing: ${SOURCE_FILE}")
 endif()

@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "update_manifest.h"
 #include "update_policy.h"
 #include "cJSON.h"

@@ -1,0 +1,11 @@
+OTA Suite
+Copyright 2026 Thomas Stoll
+
+Original package source and documentation are licensed under the Apache
+License, Version 2.0. See LICENSE.
+
+Bootstrap and dependencies supplied by ESP-IDF retain their own copyrights
+and licenses. See THIRD_PARTY_NOTICES.md and the license list at the end of
+README.md. The original Bootstrap license is included with the CSS asset.
+
+This NOTICE is informational and does not add conditions to Apache-2.0.

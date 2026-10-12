@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: OTA Suite
+Source: https://github.com/Gemelon/ota-suite
+
+Files: .gitattributes .gitignore package.json
+       components/*/idf_component.yml
+       components/web_interface/assets/en.json
+       components/web_interface/assets/de.json
+       examples/esp32s3-starter/partitions.csv
+Copyright: 2026 Thomas Stoll
+License: Apache-2.0
+Comment: Format-safe attribution; third-party CSS and upstream license files
+ are excluded and retain their original licenses.

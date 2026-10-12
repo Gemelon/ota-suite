@@ -1,91 +1,89 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
 # OTA Suite
 
-Reusable ESP-IDF components for secure-by-default, **manually installed**
-firmware updates. The package also includes a Wi-Fi provisioning/web UI
-starter, an optional WS2812 status LED, a firmware publication script, and an
-ESP32-S3 starter application. It is self-contained and independent of other
-application checkouts.
+**Ein wiederverwendbares Fundament für ESP32-Projekte: WLAN einrichten,
+das Gerät im Browser bedienen und Firmware bewusst aktualisieren.**
 
-## Repository and licensing
+OTA Suite entstand für [EBCTester](https://github.com/Gemelon/EBCTester).
+Ein Batterietester soll auch ohne dauerhaften PC auskommen und seine lokale
+Oberfläche ohne Internet bereitstellen. Updates dürfen dabei nicht ungefragt
+einen laufenden Test unterbrechen.
 
-Clone `https://github.com/Gemelon/ota-suite.git`. This repository is currently
-private. No license has yet been granted for its original source code.
-Bootstrap CSS retains its MIT license and bundled copyright notice; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+WLAN-Einrichtung, Webinterface und Updates sind aber keine Besonderheiten eines
+Batterietesters. Deshalb sind sie hier als eigenständige Komponenten
+zusammengefasst: In einem neuen Projekt sollen sie wiederverwendet werden,
+statt jedes Mal neu geschrieben zu werden.
 
-Local `sdkconfig`, credentials, editor settings and generated build files
-must not be committed. Set deployment URLs/passwords in the consuming
-application's local configuration or at runtime, not in shared defaults.
+## Funktionen
 
-## Contents
+- Geschützter Einrichtungs-AP, WLAN-Zugangsdaten in NVS und Wiederverbindung.
+- Lokales Bootstrap-Webinterface, ohne CDN oder Internetabhängigkeit.
+- Deutsch und Englisch, englische Rückfallsprache und erweiterbare Oberfläche.
+- Automatische **Verfügbarkeitsprüfung**, aber ausschließlich **manuelle
+  Firmwareinstallation** nach Bestätigung.
+- Prüfung von Manifest, Zielgerät, Version, Downloadgröße und SHA256.
+- HTTPS-Zertifikatsprüfung und Bootloader-Rollback für neue Images.
+- Optionale WS2812-Status-LED und explizites Firmware-Publishing.
 
-| Path | Purpose |
+OTA Suite benötigt keine SD-Karte und keinen EBCTester-Code.
+Die Anwendung kann eigene Tabs, Einstellungsseiten und SD-Sprachen ergänzen.
+
+## Architektur und verwandte Repositories
+
+| Paket | Aufgabe |
 | --- | --- |
-| `components/ota_manager` | Manual OTA download, image validation, rollback and boot confirmation |
-| `components/update_check` | Strict manifest parsing, semantic numeric versions, scheduled checks |
-| `components/network_manager` | Wi-Fi setup AP/station, NVS credentials and SNTP |
-| `components/web_interface` | Authenticated, CSRF-protected local status, provisioning and update UI |
-| `components/device_app` | Convenience startup sequence for the components above |
-| `components/status_led` | Optional WS2812 OTA state indicator |
-| `cmake/publish_firmware.cmake` | Explicit immutable-binary and manifest publisher |
-| `examples/esp32s3-starter` | Minimal ESP-IDF application using `device_app_start()` |
-| `tests` | Browser behavior and release-publisher tests; C manifest test source |
+| [EBCTester](https://github.com/Gemelon/EBCTester) | Anwendung: Batterietests, Aufzeichnung, Diagramme, DCIR und MariaDB |
+| **ota-suite** | Gemeinsame WLAN-, Web- und Update-Dienste |
+| [sd-card-manager](https://github.com/Gemelon/sd-card-manager) | Optionale SD-Verwaltung als Erweiterung der gemeinsamen Oberfläche |
 
-Requires ESP-IDF 6.0 or later. The included starter partition table is for
-ESP32-S3 boards with at least 4 MiB flash; each OTA slot is 0x1e0000 bytes.
-Check the board's actual flash and partition layout before flashing. For other
-chips, adjust the target, partition table, LED GPIO, and hardware-specific
-settings in the consuming application.
+| Komponente / Verzeichnis | Aufgabe |
+| --- | --- |
+| `components/network_manager` | AP, WLAN, NVS-Einstellungen und SNTP |
+| `components/web_interface` | Anmeldung, CSRF-Schutz, lokale UI und Erweiterungen |
+| `components/update_check` | Manifest, numerische Versionen und Zeitplan |
+| `components/ota_manager` | Manueller Download, Imageprüfung und Rollback |
+| `components/device_app` | Startreihenfolge und Bootbestätigung |
+| `components/status_led` | Optionale RGB-Anzeige |
+| `cmake/publish_firmware.cmake` | Versionierte Binärdatei und atomisches Manifest |
+| `examples/esp32s3-starter` | Kleine Beispielanwendung |
 
-## Build the starter
+## Herunterladen und Beispiel kompilieren
 
-Open `examples/esp32s3-starter` as the ESP-IDF project, select target
-`esp32s3`, and build with the ESP-IDF extension. Its defaults enable rollback
-and certificate/date validation. The default manifest is the reserved
-placeholder `https://updates.example.org/firmware.json`; set
-**OTA Suite update checks → Fixed firmware manifest URL** to your real
-HTTPS manifest before deployment. For local HTTP-only testing, explicitly
-enable **OTA Suite firmware updates → Allow unencrypted HTTP OTA**; use only a
-trusted test network.
+```powershell
+git clone https://github.com/Gemelon/ota-suite.git
+```
 
-The setup AP name uses the configurable
-**OTA Suite network → Setup access point SSID prefix** (default `OTASuite-`)
-plus the last three Wi-Fi MAC bytes. A random admin/AP password is
-generated and stored when no configured password is provided, and is printed
-to the serial log for first setup. Connect to that AP and open
-`http://192.168.4.1`; the login is `admin` with the AP password. HTTP Basic
-authentication is not encrypted: do not expose the web server outside a
-trusted LAN or protected AP. The AP password is also an admin credential.
+Das Repository ist derzeit privat; ein berechtigtes GitHub-Konto ist nötig.
+Getestet wird mit **ESP-IDF 6.0.1**, VS Code und ESP-IDF-Erweiterung.
+Der erste Build benötigt Internet für verwaltete Komponenten.
 
-The status LED is disabled by default. Enable
-**OTA Suite status LED → Enable the OTA status LED** and set its GPIO to match
-the board before use. The default GPIO is a common ESP32-S3 DevKitC-1 value,
-not a universal board setting.
+1. `examples/esp32s3-starter` als ESP-IDF-Projekt öffnen.
+2. Ziel `esp32s3` wählen und das tatsächliche Board konfigurieren.
+3. Manifest-Adresse in **OTA Suite update checks** auf den eigenen
+   HTTPS-Server einstellen; die vorhandene Adresse ist nur ein Beispiel.
+4. Mit **ESP-IDF: Build your project** bauen und für die Erstinstallation
+   Bootloader, Partitionstabelle und Anwendung seriell flashen.
 
-## Integrate in an existing application
+Die Beispielpartitionen verlangen mindestens **4 MiB Flash**; jedes OTA-Slot
+ist `0x1e0000` Bytes groß. Das ist nicht die 16-MiB-Partitionstabelle von
+EBCTester. Board, Imagegröße und Partitionen vor dem Flashen prüfen.
+Eine geänderte Partitionstabelle lässt sich nicht per OTA installieren.
 
-The shared web UI includes an English/German language selector with English
-fallback. Catalogs are in `components/web_interface/assets/en.json` and
-`de.json`; static texts use `data-i18n`, dynamic texts use `I18n.t/f`, and
-firmware protocol messages use `I18n.message` at display points. Apply
-`I18n.apply(pane)` before loading an extension script. Never pass user names,
-notes or JSON API payloads through message translation.
+Der AP heißt standardmäßig `OTASuite-XXXXXX`. Ohne konfiguriertes Passwort
+wird einmalig ein zufälliges erzeugt, in NVS gespeichert und seriell ausgegeben.
+Mit diesem Passwort verbinden und unter `http://192.168.4.1` als `admin`
+anmelden. Das AP-Passwort ist gleichzeitig das Admin-Passwort.
+Die Status-LED ist standardmäßig deaktiviert; GPIO bei Aktivierung prüfen.
 
-SD language files are optional and disabled by default, so the starter remains
-self-contained. A consuming application may enable
-`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES` and register authenticated
-`GET /api/i18n/languages` (language metadata/errors) and
-`GET /api/i18n/language?code=...` (version-1 JSON catalog) endpoints before
-`device_app_start()`. EBCTester provides this adapter with shared SD locking.
-Changing language reloads the page after confirmation; it does not issue
-device commands.
+Lokale `sdkconfig`, Zugangsdaten, Editor- und Build-Dateien nicht committen.
 
-Add/copy the components directory to the project or add it to
-`EXTRA_COMPONENT_DIRS`; ensure ESP-IDF component-manager manifests are
-resolved, then make the application's `main` component require `device_app`.
-Call `device_app_start()` once after initializing any application-specific
-services whose health must be considered during the OTA boot-confirmation
-window:
+## In eigene Anwendungen einbinden
+
+Das `components`-Verzeichnis über `EXTRA_COMPONENT_DIRS` einbinden und im
+Anwendungskomponent `device_app` als Abhängigkeit angeben.
+Anwendungsspezifische Dienste vor dem gemeinsamen Start initialisieren:
 
 ```c
 #include "device_app.h"
@@ -93,54 +91,53 @@ window:
 
 void app_main(void)
 {
-    /* Initialize application-specific critical services first. */
     ESP_ERROR_CHECK(device_app_start());
 }
 ```
 
-This starts rollback-aware OTA, networking, update checks, the web UI and
-optional status LED, then confirms a pending boot after ten seconds. Leave
-rollback enabled. The complete application should provide its own health
-checks before confirmation if service initialization alone is not sufficient.
-Ensure its partition table has `otadata` and two OTA app slots large enough
-for the firmware. HTTPS updates require the ESP certificate bundle, valid
-certificate dates (therefore synchronized time), and a server certificate
-trusted by that bundle.
+`device_app_start()` startet die Dienste und bestätigt ein anstehendes Image
+nach zehn Sekunden. Rollback aktiv lassen. Anwendungen mit kritischen Diensten
+müssen eigene Gesundheitsprüfungen ergänzen; das Zeitfenster ist kein
+vollständiger Hardware-Selbsttest. Netzwerkkonnektivität ist keine Voraussetzung
+für die Bootbestätigung.
 
-To start components individually instead, use the public headers in each
-component's `include` directory and preserve the initialization order in
-`components/device_app/device_app.c`. Manual installation is initiated only
-by the authenticated web UI after a user confirms the offered version; update
-availability checks never download or install an image.
+Zum Einzelstart die öffentlichen Header und die Reihenfolge in
+`components/device_app/device_app.c` verwenden.
+Die Anwendung benötigt `otadata`, zwei ausreichend große OTA-Slots, das
+ESP-Zertifikatsbundle und für HTTPS eine gültige Uhrzeit.
 
-Applications can add UI tabs with `web_interface_register_extension()` before
-`web_interface_start()`. `CONFIG_OTA_SUITE_WEB_TAB_ORDER` sets the tab order as
-comma-separated ids (built-in: `overview`, `updates`, `settings`); unlisted tabs
-are appended and the first listed tab opens on page load. Set the extension's
-`placement` to `"settings"` to render it as a card inside the settings tab
-instead of its own tab (`NULL`/`"tab"` keeps the separate tab). Up to 8
-extensions can be registered; the HTTP server allows 72 URI handlers in total.
+### Eigene Oberfläche und Sprachen
 
-The browser title and header use the application project name from the firmware
-description. `CONFIG_OTA_SUITE_WEB_PRIMARY_TABS` optionally groups tab ids under
-**Batterietester**, with remaining tabs under **Verwaltung**; an empty value
-keeps a single tab bar. `CONFIG_OTA_SUITE_WEB_ACTIVITY_URL` optionally selects a
-same-origin status endpoint returning `link.connected`, `link.framesOk`,
-`link.framesBad` and `link.ageMs`. The header RX indicator polls it every 500 ms
-while the page is visible and toggles for new valid frames. Styles and SVG
-icons are local assets, requiring no CDN.
+Erweiterungen vor Serverstart über `web_interface_register_extension()`
+registrieren. `placement="settings"` fügt eine Einstellungskarte hinzu;
+ansonsten entsteht ein Tab. Bis zu acht Erweiterungen und insgesamt
+72 HTTP-Handler sind vorgesehen.
 
-## Release publishing (explicit only)
+- `CONFIG_OTA_SUITE_WEB_TAB_ORDER`: Reihenfolge der Tabs; der erste öffnet initial.
+- `CONFIG_OTA_SUITE_WEB_PRIMARY_TABS`: Optionale Gruppierung der Tester-/Verwaltungstabs.
+- `CONFIG_OTA_SUITE_WEB_ACTIVITY_URL`: Optionaler lokaler Status-Endpunkt
+  mit `link.connected`, `framesOk`, `framesBad` und `ageMs` für die RX-Anzeige.
+- Name und Browser-Titel kommen aus dem Anwendungsnamen, nicht aus „OTA Suite“.
 
-The publisher is a standalone CMake script and is **not attached to the
-example's build**. It has no built-in network share, path or private origin.
-Create/choose an existing writable destination and supply project, version,
-target and public origin explicitly. Example from the package root after
-building the starter; replace the placeholders with deployment values:
+Die Kataloge liegen in `components/web_interface/assets/en.json` und `de.json`.
+Statische Texte verwenden `data-i18n`, dynamische Texte `I18n.t/f`.
+`I18n.message` nur für Protokollmeldungen verwenden, niemals für Benutzerdaten.
+Bei geladenen Erweiterungen `I18n.apply(pane)` aufrufen.
+
+SD-Sprachen sind standardmäßig deaktiviert. Eine Anwendung kann
+`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES` aktivieren und die authentifizierten
+Endpunkte `/api/i18n/languages` und `/api/i18n/language?code=...` bereitstellen.
+EBCTester implementiert dies mit der SD-Speichersperre.
+Ein Sprachwechsel lädt den Browser neu, führt aber keine Gerätebefehle aus.
+
+## Firmware veröffentlichen
+
+Der Publisher ist **nicht** automatisch an den Beispielbuild angehängt.
+Ein vorhandenes, beschreibbares Zielverzeichnis und eigene Serverwerte angeben:
 
 ```powershell
 cmake "-DSOURCE_FILE=examples\esp32s3-starter\build\ota_suite_starter.bin" `
-  "-DDESTINATION_DIR=D:\firmware-releases\" `
+  "-DDESTINATION_DIR=D:\firmware-releases" `
   "-DFIRMWARE_VERSION=0.1.0" `
   "-DFIRMWARE_PROJECT=ota_suite_starter" `
   "-DFIRMWARE_TARGET=esp32s3" `
@@ -149,49 +146,80 @@ cmake "-DSOURCE_FILE=examples\esp32s3-starter\build\ota_suite_starter.bin" `
   -P cmake\publish_firmware.cmake
 ```
 
-`FIRMWARE_ORIGIN` specifies only protocol, host and optional port.
-The destination directory may be supplied with or without a trailing path separator.
-`FIRMWARE_URL_PATH` is an optional web directory such as `/my-device` or
-`/esp/my-device`, without a trailing slash; omit it for the web root.
-It is independent of the local `DESTINATION_DIR`. Configure the device manifest
-URL with the same web directory, e.g. `https://updates.example.org/my-device/firmware.json`.
+`FIRMWARE_ORIGIN` enthält Schema, Host und optionalen Port.
+`FIRMWARE_URL_PATH` ist leer oder beispielsweise `/my-device`, ohne abschließenden
+Slash. Das lokale Ziel darf mit oder ohne abschließenden Pfadtrenner angegeben
+werden. Der Manifest-URL im Gerät muss zum Serververzeichnis passen.
 
-Publishing explicitly copies and verifies the actual `.bin`, refuses to
-replace an immutable version with different bytes, updates a compatibility
-`<project>.bin`, then replaces `firmware.json` last using same-directory
-temporary files and rename. The publication origin must match the configured
-device manifest origin/directory. Use HTTPS in production. The manifest binds
-project, target, numeric `major.minor.patch` version, exact binary URL, size,
-SHA-256, and notes. Run one publisher at a time; remote filesystem rename
-semantics determine the atomicity guarantees.
+Der Publisher prüft Größe und SHA256 nach dem Kopieren, erhält immutable
+`<project>-<version>.bin`, ersetzt den Kompatibilitätsnamen und veröffentlicht
+`firmware.json` zuletzt durch Umbenennen. Eine identische Version mit anderen
+Bytes wird abgelehnt. Version erhöhen, niemals eine bestehende Veröffentlichung
+überschreiben. SMB-/Serversemantik bestimmt die Atomizität; nur ein Publisher
+zur gleichen Zeit. Publishing installiert keine Firmware.
 
-## Update guarantees and limits
+Bei Firmwareweitergabe auch `LICENSE`, `NOTICE`, Drittanbieterhinweise und
+die zugehörigen Lizenztexte mitliefern.
 
-- Only the manifest is checked automatically (when connected and on schedule);
-  binary download and installation require an authenticated, CSRF-protected
-  user action and confirmation.
-- HTTPS validates the CA chain, hostname and certificate dates. Redirects are
-  rejected. HTTP is disabled unless explicitly opted in, and does not protect
-  firmware authenticity in transit.
-- Download size and SHA-256 are checked against the manifest before the OTA
-  image is finalized or selected for boot. ESP-IDF also validates image
-  integrity and target. SHA-256 alone is not a digital signature; use signed
-  firmware/secure boot where the threat model requires authenticity.
-- A pending image is confirmed only after local services survive the startup
-  window; earlier crash/reset allows bootloader rollback. Network access is
-  not part of boot health.
-- NVS and flash encryption, secure boot, and protection of physical/serial
-  access are deployment responsibilities. The local administration server
-  uses HTTP; never expose it to an untrusted network.
+## Sicherheit, Grenzen und Tests
 
-## Tests
+- Updates werden nur manuell gestartet; Prüfungen installieren nichts.
+- HTTPS prüft CA, Hostname und Datum, ohne Redirects oder HTTP-Rückfall.
+- HTTP ist nur nach ausdrücklicher Freigabe für ein vertrauenswürdiges
+  Testnetz zulässig und schützt die Serveridentität nicht.
+- SHA256 ist keine digitale Signatur. Secure Boot, signierte Images und
+  NVS-/Flash-Verschlüsselung sind gesonderte Deployment-Aufgaben.
+- Das Webinterface verwendet HTTP Basic Authentication; nicht ins Internet
+  stellen. Seriellen Zugang und gespeicherte Zugangsdaten schützen.
+- Fehler werden gemeldet; es gibt keinen automatischen Installations-Retry.
 
-With Node.js and CMake available, run the browser and release-publisher tests:
+Mit Node.js und CMake die Hosttests ausführen:
 
 ```powershell
 npm test
 ```
 
-`tests/update_manifest.test.c` is the native C manifest/version test and is
-intended to be built in an ESP-IDF test/application environment with the
-`update_check` component and cJSON dependency.
+`CMAKE_EXE` kann einen abweichenden CMake-Pfad setzen.
+`tests/update_manifest.test.c` prüft den tatsächlichen Parser mit
+`update_manifest.c`, `update_policy.c` und cJSON über einen Host-C-Compiler.
+Hosttests ersetzen keine Hardwaretests zu Stromausfall, TLS und Rollback.
+Fehlerberichte und Beiträge mit bereinigten Logs und Reproduktionsschritten
+sind willkommen; keine Geheimnisse veröffentlichen.
+
+## Lizenz und Urheber
+
+**Copyright 2026 Thomas Stoll.** Ursprünglicher Code und Dokumentation stehen
+unter **[Apache-2.0](LICENSE)**, einschließlich gewerblicher Nutzung und Verkauf
+unter den Lizenzbedingungen. Siehe [NOTICE](NOTICE).
+SPDX-Hinweise kennzeichnen Quelldateien; Formate ohne Kommentare sind in
+[.reuse/dep5](.reuse/dep5) zugeordnet. Geänderte Dateien bei Weitergabe
+kennzeichnen und vorhandene Hinweise erhalten. Fremde Bestandteile werden
+nicht unter die eigene Projektlizenz gestellt.
+
+## Drittanbieter und ihre Lizenzen
+
+| Bestandteil | Urheber / Herkunft | Lizenz und Hinweise |
+| --- | --- | --- |
+| Bootstrap 5.3.3 | The Bootstrap Authors | MIT – [Originaltext](components/web_interface/assets/BOOTSTRAP-LICENSE); CSS unverändert |
+| ESP-IDF 6.0.1 | Espressif Systems und weitere Beitragende | Apache-2.0 für den ursprünglichen Espressif-Code – [SDK-Lizenz](third_party/licenses/esp-idf/LICENSE) |
+| cJSON | Dave Gamble und cJSON contributors | MIT – [Originaltext](third_party/licenses/cjson/LICENSE) |
+| led_strip | Espressif Systems | Apache-2.0 – [Originaltext](third_party/licenses/led_strip/LICENSE) |
+| FreeRTOS-Kernel | Amazon.com und Beitragende | MIT – [Originaltext](third_party/licenses/esp-idf/FreeRTOS-LICENSE.md) |
+| lwIP | Swedish Institute of Computer Science und weitere Autoren | BSD-3-Clause – [Originaltext](third_party/licenses/esp-idf/lwip-COPYING) |
+| Mbed TLS / TF-PSA-Crypto | Upstream-Autoren | Apache-2.0 als gewählte Dual-License-Option – [Mbed TLS](third_party/licenses/esp-idf/mbedtls-LICENSE), [TF-PSA-Crypto](third_party/licenses/esp-idf/tf-psa-crypto-LICENSE); dateispezifische Hinweise bleiben gültig |
+| wpa_supplicant | Jouni Malinen und Beitragende | BSD-3-Clause – [Lizenz](third_party/licenses/esp-idf/wpa_supplicant-README), [Copyright](third_party/licenses/esp-idf/wpa_supplicant-COPYING) |
+| http_parser | Igor Sysoev, Joyent und Node contributors | MIT – [Originaltext](third_party/licenses/esp-idf/http_parser-LICENSE.txt) |
+| C-Laufzeit: Newlib / Picolibc | Verschiedene Autoren | Eigene Bedingungen – [Newlib](third_party/licenses/esp-idf/COPYING.NEWLIB), [Picolibc](third_party/licenses/esp-idf/COPYING.picolibc) |
+| GCC-Laufzeit | Free Software Foundation und Beitragende | GPL-3.0 mit GCC Runtime Library Exception 3.1 – [GPL](third_party/licenses/toolchain/COPYING3), [Ausnahme](third_party/licenses/toolchain/COPYING.RUNTIME) |
+| TLSF | Matthew Conte | BSD-3-Clause – [Originalhinweis](third_party/licenses/esp-idf/TLSF-NOTICE.txt) |
+| Argtable3 / linenoise | Stewart Heitmann; Salvatore Sanfilippo und Pieter Noordhuis | [Argtable3](third_party/licenses/esp-idf/argtable3-LICENSE) / [linenoise](third_party/licenses/esp-idf/linenoise-LICENSE), BSD-Bedingungen |
+| protobuf-c / SPIFFS, optionaler SDK-Umfang | Dave Benson und protobuf-c authors; Peter Andersson | [BSD-2-Clause](third_party/licenses/esp-idf/protobuf-c-LICENSE) / [MIT](third_party/licenses/esp-idf/spiffs-LICENSE) |
+| Weitere SDK-Dateien | Urheber laut ursprünglichen Headern | [Originalhinweise aus dem Referenzbuild](third_party/licenses/esp-idf/SOURCE-NOTICES.txt), konservativer Umfang; [Standardtexte](third_party/licenses/standard/) |
+
+Die Versionsauflösung erfolgt über die Component-Manager-Manifeste und den
+Lockfile der konsumierenden Anwendung. Weitere SDK-Lizenztexte liegen in
+[third_party/licenses/](third_party/licenses/).
+Herkunft und Weitergabepflichten stehen in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Neue Abhängigkeiten und andere
+SDK-Versionen erfordern eine erneute Prüfung; upstream Urheber- und
+Lizenzhinweise dürfen nicht entfernt werden.

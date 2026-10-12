@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 menu "OTA Suite status LED"
     config OTA_SUITE_STATUS_LED_ENABLE
         bool "Enable the OTA status LED"

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 cmake_minimum_required(VERSION 3.22)
 
 set(PROJECT_VER "0.1.0")

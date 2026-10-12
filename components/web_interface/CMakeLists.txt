@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 idf_component_register(SRCS "web_interface.c" INCLUDE_DIRS "include"
                        REQUIRES esp_http_server app_update mbedtls
                                 network_manager ota_manager update_check espressif__cjson
