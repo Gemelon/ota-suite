@@ -13,6 +13,7 @@ let initialTabApplied = false;
 let userSelectedTab = false;
 const loadedExtensions = new Set();
 const loadingExtensions = new Set();
+const renderedExtensions = new Set();
 let primaryTabs = new Set();
 const sectionTabs = { primary: null, administration: null };
 const iconPaths = {
@@ -25,6 +26,7 @@ const iconPaths = {
   "sd-card": "M5 3h10l4 4v14H5zM8 3v6h8M8 15h8M8 18h8",
   updates: "M12 16V3M7 8l5-5 5 5M4 15v6h16v-6",
   settings: "M5 3v18M12 3v18M19 3v18M2 8h6M9 16h6M16 10h6",
+  debug: "M4 4h16v16H4zM8 9l3 3-3 3M13 15h4",
 };
 
 function addIcon(element, id) {
@@ -207,8 +209,21 @@ async function loadExtension(extension, pane) {
 
 function renderExtensions(extensions) {
   const tabs = byId("web-tabs");
+  const present = new Set((extensions || []).map((extension) => extension.id));
+  for (const id of [...renderedExtensions]) {
+    if (present.has(id)) continue;
+    renderedExtensions.delete(id);
+    loadedExtensions.delete(id);
+    loadingExtensions.delete(id);
+    const button = byId(`tab-button-${id}`);
+    if (button) button.parentElement.remove();
+    for (const pane of [byId(`tab-${id}`), byId(`settings-ext-${id}`)]) {
+      if (pane) pane.remove();
+    }
+  }
   for (const extension of extensions || []) {
     if (!/^[a-z0-9-]{1,16}$/.test(extension.id)) continue;
+    renderedExtensions.add(extension.id);
     if (extension.placement === "settings") {
       let pane = byId(`settings-ext-${extension.id}`);
       if (!pane) {

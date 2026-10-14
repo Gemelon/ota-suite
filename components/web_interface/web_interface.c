@@ -239,6 +239,9 @@ static esp_err_t status_handler(httpd_req_t *req)
         return error_response(req, "500 Internal Server Error", "Could not create UI tabs.");
     }
     for (size_t i = 0; ok && i < extension_count; ++i) {
+        if (extensions[i]->visible != NULL && !extensions[i]->visible()) {
+            continue;
+        }
         cJSON *tab = cJSON_CreateObject();
         if (tab == NULL ||
             !cJSON_AddStringToObject(tab, "id", extensions[i]->id) ||

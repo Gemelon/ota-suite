@@ -24,6 +24,10 @@ typedef struct {
     size_t route_count;
     /* NULL or "tab": own tab; "settings": card embedded in the settings tab. */
     const char *placement;
+    /* Optional. When set and returning false, the extension is hidden in the UI.
+     * The callback must not block; its routes stay registered and must perform
+     * their own authorization and availability checks. */
+    bool (*visible)(void);
 } web_interface_extension_t;
 
 esp_err_t web_interface_register_extension(const web_interface_extension_t *extension);
