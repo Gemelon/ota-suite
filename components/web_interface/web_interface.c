@@ -36,7 +36,7 @@ extern const unsigned char de_end[] asm("_binary_de_json_end");
 static const char *TAG = "web";
 static char expected_auth[128];
 static char csrf_token[33];
-#define MAX_EXTENSIONS 8
+#define MAX_EXTENSIONS 12
 static const web_interface_extension_t *extensions[MAX_EXTENSIONS];
 static size_t extension_count;
 static httpd_uri_t extension_asset_routes[MAX_EXTENSIONS][2];
