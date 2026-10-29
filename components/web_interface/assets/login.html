@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+  <link href="/bootstrap.min.css" rel="stylesheet">
+  <script src="/i18n.js?login=1" defer></script>
+  <script src="/login.js" defer></script>
+</head>
+<body class="bg-body-tertiary">
+  <main class="container py-5">
+    <div class="row justify-content-center"><section class="col-md-6 col-lg-4">
+      <div class="card"><div class="card-body">
+        <h1 class="h4" data-i18n="auth.login">Login</h1>
+        <p data-i18n="auth.loginHelp">Log in as admin with the access point password. Use only a trusted network: HTTP is not encrypted.</p>
+        <div id="language-error" class="alert alert-warning d-none" role="alert"></div>
+        <div id="login-error" class="alert alert-danger d-none" role="alert"></div>
+        <form id="login-form" method="post" action="/api/auth/login">
+          <label for="login-username" class="form-label" data-i18n="auth.username">Username</label>
+          <input id="login-username" name="username" class="form-control mb-3" autocomplete="username" value="admin" required>
+          <label for="login-password" class="form-label" data-i18n="auth.password">Admin password</label>
+          <input id="login-password" name="password" type="password" class="form-control mb-3" autocomplete="current-password" maxlength="63" required>
+          <button id="login-submit" type="submit" class="btn btn-primary" data-i18n="auth.login">Login</button>
+        </form>
+      </div></div>
+    </section></div>
+  </main>
+</body>
+</html>

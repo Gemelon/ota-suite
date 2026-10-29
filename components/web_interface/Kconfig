@@ -2,6 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menu "OTA Suite web interface"
+    config OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
+        bool "Require admin password when saving web settings"
+        default y
+        help
+            Require the access point/admin password for every settings save,
+            in addition to a valid login session and CSRF token. Extensions
+            must use web_interface_authorize_settings_request for settings.
+            This does not affect test controls, uploads or OTA actions.
     config OTA_SUITE_WEB_SD_LANGUAGES
         bool "Enable optional SD language provider"
         default n

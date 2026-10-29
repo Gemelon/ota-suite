@@ -4,8 +4,62 @@
 "use strict";
 
 const byId = (id) => document.getElementById(id);
+const originalFetch = window.fetch.bind(window);
+let loginRedirecting = false;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  if (response.status === 401 && !loginRedirecting) {
+    loginRedirecting = true;
+    location.replace("/login");
+  }
+  return response;
+};
+
+let passwordPending = false;
+window.WebAuth = {
+  async settingsHeaders() {
+    if (passwordPending) throw new Error(I18n.t("auth.pending"));
+    const input = byId("settings-admin-password");
+    passwordPending = true;
+    try {
+      const response = await fetch("/api/status", {
+        cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) throw new Error(I18n.message(await response.text()));
+      const status = await response.json();
+      const headers = { "X-CSRF-Token": status.csrfToken };
+      if (!status.settingsPasswordRequired) return headers;
+      const dialog = byId("settings-password-dialog");
+      input.value = "";
+      const password = await new Promise((resolve) => {
+        const finish = (value) => {
+          dialog.oncancel = null;
+          byId("settings-password-form").onsubmit = null;
+          byId("settings-password-cancel").onclick = null;
+          dialog.close();
+          resolve(value);
+        };
+        dialog.oncancel = (event) => { event.preventDefault(); finish(null); };
+        byId("settings-password-cancel").onclick = () => finish(null);
+        byId("settings-password-form").onsubmit = (event) => {
+          event.preventDefault();
+          finish(input.value);
+        };
+        dialog.showModal();
+        input.focus();
+      });
+      if (password === null) return null;
+      headers["X-Admin-Password"] = password;
+      return headers;
+    } finally {
+      input.value = "";
+      passwordPending = false;
+    }
+  },
+};
 let csrfToken = "";
 let currentStatus = null;
+let loginSettingsLoaded = false;
 let sending = false;
 let statusGeneration = 0;
 let activeTab = "overview";
@@ -156,6 +210,8 @@ function showMessage(id, message, isError = false) {
 }
 
 function updateButtons() {
+  byId("logout").disabled = sending || !currentStatus;
+  byId("login-settings-save").disabled = sending || !currentStatus;
   byId("ota-start").disabled = sending || !currentStatus?.otaReady ||
     !currentStatus?.updateAvailable || currentStatus?.updateStale || currentStatus?.updateChecking;
   byId("update-check").disabled = sending || !currentStatus?.updateConfigured ||
@@ -306,6 +362,12 @@ document.querySelectorAll("[data-tab-target]").forEach((button) => {
 function render(status) {
   csrfToken = status.csrfToken;
   currentStatus = status;
+  if (!loginSettingsLoaded) {
+    byId("session-days").value = String(status.sessionDays || 1);
+    loginSettingsLoaded = true;
+  }
+  byId("settings-password-note").textContent = I18n.t(
+    status.settingsPasswordRequired ? "auth.confirmEnabled" : "auth.confirmDisabled");
   document.title = status.project;
   byId("app-brand").textContent = status.project;
   addIcon(byId("app-brand"), "battery");
@@ -398,6 +460,11 @@ async function sendAction(url, body, version) {
   updateButtons();
   try {
     const headers = { "X-CSRF-Token": csrfToken };
+    if (url === "/api/network" || url === "/api/auth/settings") {
+      const settingsHeaders = await WebAuth.settingsHeaders();
+      if (settingsHeaders === null) return;
+      Object.assign(headers, settingsHeaders);
+    }
     if (version !== undefined) headers["X-Update-Version"] = version;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const response = await fetch(url, {
@@ -409,6 +476,7 @@ async function sendAction(url, body, version) {
     const message = await response.text();
     if (!response.ok) throw new Error(I18n.message(message));
     showMessage("action-result", message);
+    if (url === "/api/network") byId("password").value = "";
     currentStatus = null;
   } catch (error) {
     showMessage("action-result",
@@ -452,8 +520,26 @@ byId("wifi-form").addEventListener("submit", (event) => {
     showMessage("action-result", I18n.t("text.3dd1047a8924"), true);
     return;
   }
-  byId("password").value = "";
   void sendAction("/api/network", { ssid, password });
+});
+
+byId("login-settings-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (sending || !currentStatus) return;
+  void sendAction("/api/auth/settings", { sessionDays: Number(byId("session-days").value) });
+});
+
+byId("logout").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST", headers: { "X-CSRF-Token": csrfToken },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(I18n.message(await response.text()));
+    location.replace("/login");
+  } catch (error) {
+    showMessage("action-result", error.message, true);
+  }
 });
 
 void I18n.ready.then(refresh);

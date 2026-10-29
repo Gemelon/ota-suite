@@ -32,6 +32,7 @@ typedef struct {
 
 esp_err_t web_interface_register_extension(const web_interface_extension_t *extension);
 bool web_interface_authorize_request(httpd_req_t *req, bool mutation);
+bool web_interface_authorize_settings_request(httpd_req_t *req);
 esp_err_t web_interface_start(void);
 
 #ifdef __cplusplus

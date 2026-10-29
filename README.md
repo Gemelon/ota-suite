@@ -125,6 +125,32 @@ SD languages are disabled by default. An application can enable
 EBCTester supplies this provider with shared SD locking. Language changes
 reload the page but do not issue device commands.
 
+### Login sessions and settings confirmation
+
+The login page at `/login` uses `admin` and the AP password. Login creates a
+random 256-bit persistent `HttpOnly; SameSite=Lax` cookie. Under Settings,
+select daily (24 hours, default) or weekly (7 days) login. The choice is saved
+in NVS and applies to new logins. Sessions have fixed monotonic expiry without
+renewal and are invalidated by device restart or logout. Eight concurrent
+browser sessions are supported; a ninth login returns HTTP 429.
+
+`POST /api/auth/login` accepts JSON `username`/`password` with `X-Web-Login: 1`.
+Protected APIs require the cookie; mutations additionally require
+`X-CSRF-Token` from `/api/status`. Logout is `POST /api/auth/logout`.
+Basic-auth credentials are no longer accepted. Bundled login/CSS/language
+assets are public, but status and extension assets remain authenticated.
+
+`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` defaults to `y`. Every settings
+save then requires the AP/admin password again, not just a valid session.
+The built-in Wi-Fi and login-duration forms implement this. Application
+settings endpoints must call `web_interface_authorize_settings_request(req)`
+before parsing/applying data. Their UI must call
+`await WebAuth.settingsHeaders()` and stop if it returns `null` (cancel).
+Otherwise include its CSRF/password headers in that one save request. The UI
+uses a masked dialog and does not remember the password for later saves.
+Setting the option to `n` disables only the additional password check.
+Operational commands still use `web_interface_authorize_request(req, true)`.
+
 ## Publishing firmware
 
 The standalone publisher is **not attached to the example build**.
@@ -163,7 +189,8 @@ notices, and their license texts.
   authenticate the server.
 - SHA256 is not a signature. Secure Boot, signed images, and NVS/flash
   encryption are separate deployment responsibilities.
-- Administration uses HTTP Basic Authentication. Do not expose it to the
+- Administration uses cookie sessions over unencrypted HTTP. Passwords and
+  cookies can be intercepted; use only a trusted network. Do not expose it to the
   internet; protect serial access and stored credentials.
 - Errors are reported; installation is not retried automatically.
 
