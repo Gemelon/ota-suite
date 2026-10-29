@@ -25,6 +25,7 @@
         <span id="frame-label" class="small"><span data-i18n="text.ecbc52cf53bc">EBC disconnected</span></span>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <button id="logout" class="btn btn-outline-secondary btn-sm" type="button" disabled data-i18n="auth.logout">Log out</button>
         <label for="language-select" class="small" data-i18n="language.title">Language</label>
         <select id="language-select" class="form-select form-select-sm w-auto" disabled aria-label="Language"
                 data-i18n-attrs="aria-label:language.title">
@@ -105,6 +106,25 @@
     </section>
     <section id="tab-settings" class="tab-pane d-none" role="tabpanel" aria-labelledby="tab-button-settings">
       <div class="row g-4">
+      <section class="col-12" aria-labelledby="login-settings-title">
+        <div class="card"><div class="card-body">
+          <h2 id="login-settings-title" class="h4" data-i18n="auth.settings">Login duration</h2>
+          <p data-i18n="auth.durationHelp">Choose 24 hours or 7 days from login, without automatic renewal. Changes apply to new logins. A device restart requires a new login.</p>
+          <form id="login-settings-form" class="row g-3">
+            <div class="col-md-6">
+              <label for="session-days" class="form-label" data-i18n="auth.interval">Require login</label>
+              <select id="session-days" class="form-select">
+                <option value="1" data-i18n="auth.daily">Daily (24 hours)</option>
+                <option value="7" data-i18n="auth.weekly">Weekly (7 days)</option>
+              </select>
+            </div>
+            <div class="col-md-3 align-self-end">
+              <button id="login-settings-save" class="btn btn-primary" type="submit" disabled data-i18n="text.f6b2ff39f540">Save</button>
+            </div>
+          </form>
+          <p id="settings-password-note" class="form-text mt-3"></p>
+        </div></div>
+      </section>
       <section class="col-12" aria-labelledby="wifi-title">
         <div class="card">
           <div class="card-body">
@@ -134,5 +154,16 @@
     </section>
     <div id="extension-panes"></div>
   </main>
+  <dialog id="settings-password-dialog" class="border rounded-3" aria-labelledby="settings-password-title">
+    <form id="settings-password-form">
+      <h2 id="settings-password-title" class="h5" data-i18n="auth.confirm">Confirm settings change</h2>
+      <label for="settings-admin-password" class="form-label" data-i18n="auth.password">Admin password</label>
+      <input id="settings-admin-password" type="password" class="form-control mb-3" maxlength="63" autocomplete="current-password" required>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit" data-i18n="text.f6b2ff39f540">Save</button>
+        <button id="settings-password-cancel" class="btn btn-secondary" type="button" data-i18n="auth.cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

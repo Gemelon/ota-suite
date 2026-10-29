@@ -110,6 +110,9 @@
     let requested = navigator.language?.toLowerCase().startsWith("de") ? "de" : "en";
     try { requested = localStorage.getItem("ebctester.language") || requested; }
     catch (error) { warn(error); }
+    if (builtins.loginPage && !["en", "de"].includes(requested)) {
+      requested = navigator.language?.toLowerCase().startsWith("de") ? "de" : "en";
+    }
     const available = new Map([["en",builtins.en],["de",builtins.de]]);
     let catalog = null;
     try {

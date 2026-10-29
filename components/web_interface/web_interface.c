@@ -3,6 +3,7 @@
  */
 
 #include "web_interface.h"
+#include "web_auth.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,9 +12,7 @@
 #include "esp_app_desc.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "esp_random.h"
 #include "sdkconfig.h"
-#include "mbedtls/base64.h"
 #include "network_manager.h"
 #include "ota_manager.h"
 #include "update_check.h"
@@ -34,8 +33,6 @@ extern const unsigned char de_start[] asm("_binary_de_json_start");
 extern const unsigned char de_end[] asm("_binary_de_json_end");
 
 static const char *TAG = "web";
-static char expected_auth[128];
-static char csrf_token[33];
 #define MAX_EXTENSIONS 12
 static const web_interface_extension_t *extensions[MAX_EXTENSIONS];
 static size_t extension_count;
@@ -60,37 +57,6 @@ static esp_err_t error_response(httpd_req_t *req, const char *status, const char
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
     ESP_LOGW(TAG, "%s %s: %s", status, req->uri, message);
     return httpd_resp_send(req, message, HTTPD_RESP_USE_STRLEN);
-}
-
-static bool equal_secret(const char *a, const char *b)
-{
-    size_t length = strlen(b);
-    if (strlen(a) != length) {
-        return false;
-    }
-    unsigned char difference = 0;
-    for (size_t i = 0; i < length; ++i) {
-        difference |= (unsigned char)a[i] ^ (unsigned char)b[i];
-    }
-    return difference == 0;
-}
-
-bool web_interface_authorize_request(httpd_req_t *req, bool mutation)
-{
-    char value[128];
-    if (httpd_req_get_hdr_value_str(req, "Authorization", value, sizeof(value)) != ESP_OK ||
-        !equal_secret(value, expected_auth)) {
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"Device\", charset=\"UTF-8\"");
-        error_response(req, "401 Unauthorized", "Login required: admin / access point password.");
-        return false;
-    }
-    if (mutation &&
-        (httpd_req_get_hdr_value_str(req, "X-CSRF-Token", value, sizeof(value)) != ESP_OK ||
-         !equal_secret(value, csrf_token))) {
-        error_response(req, "403 Forbidden", "Invalid session token. Reload the page.");
-        return false;
-    }
-    return true;
 }
 
 static esp_err_t index_handler(httpd_req_t *req)
@@ -136,9 +102,6 @@ static esp_err_t script_handler(httpd_req_t *req)
 
 static esp_err_t css_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, false)) {
-        return ESP_OK;
-    }
     response_headers(req);
     httpd_resp_set_type(req, "text/css; charset=utf-8");
     return httpd_resp_send(req, (const char *)css_start, css_end - css_start);
@@ -146,7 +109,6 @@ static esp_err_t css_handler(httpd_req_t *req)
 
 static esp_err_t language_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, false)) return ESP_OK;
     response_headers(req);
     httpd_resp_set_type(req, "application/javascript; charset=utf-8");
     esp_err_t err = httpd_resp_sendstr_chunk(req, "window.EBCLanguages={en:");
@@ -154,7 +116,8 @@ static esp_err_t language_handler(httpd_req_t *req)
     if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",de:");
     if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)de_start, de_end - de_start);
 #ifdef CONFIG_OTA_SUITE_WEB_SD_LANGUAGES
-    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",sdEnabled:true};\n");
+    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req,
+        strstr(req->uri, "?login=1") != NULL ? ",loginPage:true,sdEnabled:false};\n" : ",sdEnabled:true};\n");
 #else
     if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",sdEnabled:false};\n");
 #endif
@@ -164,9 +127,6 @@ static esp_err_t language_handler(httpd_req_t *req)
 
 static esp_err_t theme_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, false)) {
-        return ESP_OK;
-    }
     response_headers(req);
     httpd_resp_set_type(req, "text/css; charset=utf-8");
     return httpd_resp_send(req, (const char *)theme_start, theme_end - theme_start);
@@ -204,7 +164,9 @@ static esp_err_t status_handler(httpd_req_t *req)
     bool ok =
         cJSON_AddStringToObject(root, "version", esp_app_get_description()->version) &&
         cJSON_AddStringToObject(root, "project", esp_app_get_description()->project_name) &&
-        cJSON_AddStringToObject(root, "csrfToken", csrf_token) &&
+        cJSON_AddStringToObject(root, "csrfToken", web_auth_csrf_token()) &&
+        cJSON_AddNumberToObject(root, "sessionDays", web_auth_session_days()) &&
+        cJSON_AddBoolToObject(root, "settingsPasswordRequired", web_auth_settings_password_required()) &&
         cJSON_AddStringToObject(root, "tabOrder", CONFIG_OTA_SUITE_WEB_TAB_ORDER) &&
         cJSON_AddStringToObject(root, "primaryTabs", CONFIG_OTA_SUITE_WEB_PRIMARY_TABS) &&
         cJSON_AddStringToObject(root, "activityUrl", CONFIG_OTA_SUITE_WEB_ACTIVITY_URL) &&
@@ -276,7 +238,7 @@ static esp_err_t status_handler(httpd_req_t *req)
 
 static esp_err_t network_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, true)) {
+    if (!web_interface_authorize_settings_request(req)) {
         return ESP_OK;
     }
     if (ota_manager_is_busy()) {
@@ -410,35 +372,25 @@ esp_err_t web_interface_register_extension(const web_interface_extension_t *exte
 
 esp_err_t web_interface_start(void)
 {
-    char login[80];
-    snprintf(login, sizeof(login), "admin:%s", network_manager_admin_password());
-    size_t length = 0;
-    memcpy(expected_auth, "Basic ", 6);
-    int result = mbedtls_base64_encode((unsigned char *)expected_auth + 6,
-                                      sizeof(expected_auth) - 7, &length,
-                                      (const unsigned char *)login, strlen(login));
-    memset(login, 0, sizeof(login));
-    if (result != 0) {
-        ESP_LOGE(TAG, "Cannot encode admin authentication");
-        return ESP_FAIL;
-    }
-    expected_auth[6 + length] = '\0';
-    uint8_t random[16];
-    esp_fill_random(random, sizeof(random));
-    for (size_t i = 0; i < sizeof(random); ++i) {
-        snprintf(csrf_token + 2 * i, 3, "%02x", random[i]);
-    }
+    esp_err_t err = web_auth_init();
+    if (err != ESP_OK) return err;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 12288;
     config.lru_purge_enable = true;
     config.recv_wait_timeout = 5;
     config.send_wait_timeout = 5;
     /* Built-in routes plus two asset routes and the API routes of each extension. */
-    config.max_uri_handlers = 72;
+    config.max_uri_handlers = 80;
     httpd_handle_t server = NULL;
-    esp_err_t err = httpd_start(&server, &config);
+    err = httpd_start(&server, &config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "HTTP server failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    err = web_auth_register(server);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot register authentication routes: %s", esp_err_to_name(err));
+        httpd_stop(server);
         return err;
     }
     const httpd_uri_t routes[] = {
