@@ -106,7 +106,7 @@ sufficient OTA slots, the ESP certificate bundle, and valid time for HTTPS.
 
 Register extensions with `web_interface_register_extension()` before server
 startup. `placement="settings"` creates a settings card; otherwise a tab is
-created. Up to 12 extensions and 80 total HTTP handlers are supported.
+created. Up to 16 extensions and 96 total HTTP handlers are supported.
 
 - `CONFIG_OTA_SUITE_WEB_TAB_ORDER`: Tab order; the first opens initially.
 - `CONFIG_OTA_SUITE_WEB_PRIMARY_TABS`: Optional testing/administration grouping.
