@@ -36,7 +36,7 @@ extern const unsigned char de_end[] asm("_binary_de_json_end");
 static const char *TAG = "web";
 static char expected_auth[128];
 static char csrf_token[33];
-#define MAX_EXTENSIONS 12
+#define MAX_EXTENSIONS 16
 static const web_interface_extension_t *extensions[MAX_EXTENSIONS];
 static size_t extension_count;
 static httpd_uri_t extension_asset_routes[MAX_EXTENSIONS][2];
@@ -434,7 +434,7 @@ esp_err_t web_interface_start(void)
     config.recv_wait_timeout = 5;
     config.send_wait_timeout = 5;
     /* Built-in routes plus two asset routes and the API routes of each extension. */
-    config.max_uri_handlers = 72;
+    config.max_uri_handlers = 96;
     httpd_handle_t server = NULL;
     esp_err_t err = httpd_start(&server, &config);
     if (err != ESP_OK) {
