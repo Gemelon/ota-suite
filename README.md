@@ -184,6 +184,11 @@ notices, and their license texts.
 ## Safety, limitations, and tests
 
 - Only manual actions install updates; checks install nothing.
+- Opening the web UI requests one availability check as soon as networking
+  and the required HTTPS clock are ready, or reuses a check already in progress.
+  It needs no settings-password confirmation and never installs firmware.
+  Status polling does not repeat the request; failures remain visible for
+  manual retry with **Check updates**.
 - HTTPS checks CA, hostname, and dates; no redirects or HTTP fallback.
 - HTTP requires explicit opt-in for a trusted test network and does not
   authenticate the server.

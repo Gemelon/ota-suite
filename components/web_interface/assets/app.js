@@ -65,6 +65,7 @@ let statusGeneration = 0;
 let activeTab = "overview";
 let initialTabApplied = false;
 let userSelectedTab = false;
+let startupUpdateCheckAttempted = false;
 const loadedExtensions = new Set();
 const loadingExtensions = new Set();
 const renderedExtensions = new Set();
@@ -439,6 +440,12 @@ async function refresh() {
     if (!sending && generation === statusGeneration) {
       render(status);
       byId("connection-error").classList.add("d-none");
+      if (!startupUpdateCheckAttempted && status.updateConfigured && status.connected &&
+          !status.configuring && !status.otaBusy &&
+          (status.otaInsecureHttp || status.timeReady)) {
+        startupUpdateCheckAttempted = true;
+        if (!status.updateChecking) await sendAction("/api/updates/check");
+      }
     }
   } catch (error) {
     if (!sending && generation === statusGeneration) {

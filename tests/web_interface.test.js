@@ -30,7 +30,7 @@ const readyStatus = {
   updateLastSuccess: 1791535000, updateLastSuccessUptime: 10,
 };
 
-function createPage(status = readyStatus, confirmResult = true) {
+function createPage(status = readyStatus, confirmResult = true, checkOnOpen = false) {
   const elements = new Map();
   const requests = [];
   const timers = [];
@@ -86,6 +86,8 @@ function createPage(status = readyStatus, confirmResult = true) {
   vm.createContext(context);
   vm.runInContext(languageScript, context);
   vm.runInContext(script, context);
+  // Isolate manual-action tests from the separately tested page-open check.
+  if (!checkOnOpen) vm.runInContext("startupUpdateCheckAttempted = true;", context);
   return {
     element, requests, confirmations,
     async settle() { await new Promise(setImmediate); },
@@ -115,6 +117,16 @@ test("startup and repeated polling never automatically start OTA", async () => {
   assert.equal(page.element("ota-start").disabled, false);
   assert.equal(page.mutations().length, 0);
   assert.ok(page.requests.every((request) => request.url === "/api/status"));
+});
+
+test("page opening checks availability once and never starts OTA", async () => {
+  const page = createPage(readyStatus, true, true);
+  await page.settle();
+  for (let i = 0; i < 5; ++i) await page.poll();
+  assert.equal(page.mutations().length, 1);
+  assert.equal(page.mutations()[0].url, "/api/updates/check");
+  assert.equal(page.mutations()[0].options.headers["X-CSRF-Token"], "test-token");
+  assert.equal(page.confirmations.length, 0);
 });
 
 test("OTA requires explicit confirmation and sends exactly one authenticated POST", async () => {
