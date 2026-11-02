@@ -108,15 +108,31 @@
       <div class="row g-4">
       <section class="col-12" aria-labelledby="login-settings-title">
         <div class="card"><div class="card-body">
-          <h2 id="login-settings-title" class="h4" data-i18n="auth.settings">Login duration</h2>
+          <h2 id="login-settings-title" class="h4" data-i18n="auth.settings">Login Settings</h2>
           <p data-i18n="auth.durationHelp">Choose 24 hours or 7 days from login, without automatic renewal. Changes apply to new logins. A device restart requires a new login.</p>
           <form id="login-settings-form" class="row g-3">
+            <div class="col-12">
+              <div class="form-check">
+                <input id="login-enabled" class="form-check-input" type="checkbox" checked>
+                <label for="login-enabled" class="form-check-label" data-i18n="auth.enabled">Require browser login</label>
+              </div>
+              <div class="form-text" data-i18n="auth.enabledHelp">Disabling login allows anyone on the network to access the interface and controls. Settings changes still require the login password.</div>
+            </div>
             <div class="col-md-6">
               <label for="session-days" class="form-label" data-i18n="auth.interval">Require login</label>
               <select id="session-days" class="form-select">
                 <option value="1" data-i18n="auth.daily">Daily (24 hours)</option>
                 <option value="7" data-i18n="auth.weekly">Weekly (7 days)</option>
               </select>
+            </div>
+            <div class="col-md-6">
+              <label for="login-new-password" class="form-label" data-i18n="auth.newPassword">New login password</label>
+              <input id="login-new-password" class="form-control" type="password" maxlength="63" autocomplete="new-password">
+              <div class="form-text" data-i18n="auth.passwordHelp">Leave empty to keep the current password. Use 8-63 printable ASCII characters without leading or trailing spaces. This password also confirms settings changes; the Wi-Fi access point password is unchanged.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="login-confirm-password" class="form-label" data-i18n="auth.repeatPassword">Repeat new password</label>
+              <input id="login-confirm-password" class="form-control" type="password" maxlength="63" autocomplete="new-password">
             </div>
             <div class="col-md-3 align-self-end">
               <button id="login-settings-save" class="btn btn-primary" type="submit" disabled data-i18n="text.f6b2ff39f540">Save</button>

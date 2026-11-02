@@ -166,6 +166,7 @@ static esp_err_t status_handler(httpd_req_t *req)
         cJSON_AddStringToObject(root, "project", esp_app_get_description()->project_name) &&
         cJSON_AddStringToObject(root, "csrfToken", web_auth_csrf_token()) &&
         cJSON_AddNumberToObject(root, "sessionDays", web_auth_session_days()) &&
+        cJSON_AddBoolToObject(root, "loginEnabled", web_auth_login_enabled()) &&
         cJSON_AddBoolToObject(root, "settingsPasswordRequired", web_auth_settings_password_required()) &&
         cJSON_AddStringToObject(root, "tabOrder", CONFIG_OTA_SUITE_WEB_TAB_ORDER) &&
         cJSON_AddStringToObject(root, "primaryTabs", CONFIG_OTA_SUITE_WEB_PRIMARY_TABS) &&

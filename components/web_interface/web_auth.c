@@ -11,7 +11,6 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_timer.h"
-#include "network_manager.h"
 #include "nvs.h"
 #include "sdkconfig.h"
 
@@ -23,7 +22,14 @@ extern const unsigned char login_script_end[] asm("_binary_login_js_end");
 static const char *TAG = "web_auth";
 static web_session_t sessions[WEB_SESSION_COUNT];
 static char csrf_token[33];
-static uint8_t session_days = 1;
+typedef struct {
+    uint8_t version;
+    uint8_t session_days;
+    uint8_t login_enabled;
+    char password[64];
+} web_auth_settings_t;
+
+static web_auth_settings_t settings;
 static int64_t last_failed_password = -1000000;
 
 static void random_hex(char *destination, size_t bytes)
@@ -55,7 +61,7 @@ static bool password_matches(const char *password)
 {
     const int64_t now = esp_timer_get_time();
     if (now - last_failed_password < 1000000) return false;
-    if (web_session_equal(password, network_manager_admin_password())) return true;
+    if (web_session_equal(password, settings.password)) return true;
     last_failed_password = now;
     ESP_LOGW(TAG, "Admin password verification failed");
     return false;
@@ -63,7 +69,7 @@ static bool password_matches(const char *password)
 
 bool web_interface_authorize_request(httpd_req_t *req, bool mutation)
 {
-    if (request_session(req) == NULL) {
+    if (settings.login_enabled && request_session(req) == NULL) {
         if (req->method == HTTP_GET && strcmp(req->uri, "/") == 0) {
             httpd_resp_set_hdr(req, "Location", "/login");
             respond(req, "303 See Other", "Login required.");
@@ -100,7 +106,7 @@ bool web_interface_authorize_settings_request(httpd_req_t *req)
 
 static cJSON *read_json(httpd_req_t *req)
 {
-    char body[256];
+    char body[512];
     if (req->content_len == 0 || req->content_len >= sizeof(body)) return NULL;
     size_t received = 0;
     while (received < req->content_len) {
@@ -140,14 +146,14 @@ static esp_err_t login_handler(httpd_req_t *req)
     char token[WEB_SESSION_TOKEN_LENGTH + 1];
     random_hex(token, 32);
     web_session_t *session = web_session_create(sessions, token,
-                                              (uint64_t)(esp_timer_get_time() / 1000000), session_days);
+                                              (uint64_t)(esp_timer_get_time() / 1000000), settings.session_days);
     if (session == NULL) {
         return respond(req, "429 Too Many Requests", "Too many active logins. Log out on another browser or try again later.");
     }
     char cookie[160];
     /* Lax preserves login on links from dashboards; mutations still require CSRF. */
     snprintf(cookie, sizeof(cookie), WEB_SESSION_COOKIE "=%s; Path=/; Max-Age=%u; HttpOnly; SameSite=Lax",
-             session->token, (unsigned)session_days * 86400);
+             session->token, (unsigned)settings.session_days * 86400);
     httpd_resp_set_hdr(req, "Set-Cookie", cookie);
     return respond(req, "200 OK", "Logged in.");
 }
@@ -161,36 +167,70 @@ static esp_err_t logout_handler(httpd_req_t *req)
     return respond(req, "200 OK", "Logged out.");
 }
 
+static bool valid_password(const char *password)
+{
+    const size_t length = strlen(password);
+    if (length < 8 || length >= sizeof(settings.password) ||
+        password[0] == ' ' || password[length - 1] == ' ') return false;
+    for (size_t i = 0; i < length; ++i) {
+        if ((unsigned char)password[i] < 32 || (unsigned char)password[i] > 126) return false;
+    }
+    return true;
+}
+
 static esp_err_t settings_handler(httpd_req_t *req)
 {
     if (!web_interface_authorize_settings_request(req)) return ESP_OK;
     cJSON *json = read_json(req);
     const cJSON *days = cJSON_GetObjectItemCaseSensitive(json, "sessionDays");
+    const cJSON *enabled = cJSON_GetObjectItemCaseSensitive(json, "loginEnabled");
+    cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
     if (!cJSON_IsObject(json) || !cJSON_IsNumber(days) ||
-        (days->valuedouble != 1 && days->valuedouble != 7)) {
+        (days->valuedouble != 1 && days->valuedouble != 7) ||
+        (enabled != NULL && !cJSON_IsBool(enabled)) ||
+        (password != NULL && (!cJSON_IsString(password) ||
+         (password->valuestring[0] != '\0' && !valid_password(password->valuestring))))) {
+        if (cJSON_IsString(password)) memset(password->valuestring, 0, strlen(password->valuestring));
         cJSON_Delete(json);
-        return respond(req, "400 Bad Request", "Select a daily or weekly login.");
+        return respond(req, "400 Bad Request", "Select a daily or weekly login and use 8-63 printable ASCII characters without leading or trailing spaces for a new password.");
     }
-    const uint8_t value = (uint8_t)days->valuedouble;
+    web_auth_settings_t next = settings;
+    next.session_days = (uint8_t)days->valuedouble;
+    if (enabled != NULL) next.login_enabled = cJSON_IsTrue(enabled);
+    if (cJSON_IsString(password) && password->valuestring[0] != '\0') {
+        memset(next.password, 0, sizeof(next.password));
+        memcpy(next.password, password->valuestring, strlen(password->valuestring));
+    }
+    if (cJSON_IsString(password)) memset(password->valuestring, 0, strlen(password->valuestring));
     cJSON_Delete(json);
     nvs_handle_t handle;
     esp_err_t err = nvs_open("web_auth", NVS_READWRITE, &handle);
     if (err == ESP_OK) {
-        err = nvs_set_u8(handle, "session_days", value);
+        /* One blob keeps the password and login policy together across interrupted writes. */
+        err = nvs_set_blob(handle, "settings", &next, sizeof(next));
         if (err == ESP_OK) err = nvs_commit(handle);
         nvs_close(handle);
     }
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Cannot save login duration: %s", esp_err_to_name(err));
-        return respond(req, "500 Internal Server Error", "Could not save login duration.");
+        memset(&next, 0, sizeof(next));
+        ESP_LOGE(TAG, "Cannot save login settings: %s", esp_err_to_name(err));
+        return respond(req, "500 Internal Server Error", "Could not save login settings.");
     }
-    session_days = value;
-    return respond(req, "200 OK", "Login duration saved. It applies to new logins.");
+    const bool revoke_sessions = settings.login_enabled != next.login_enabled ||
+                                 !web_session_equal(settings.password, next.password);
+    settings = next;
+    memset(&next, 0, sizeof(next));
+    if (revoke_sessions) memset(sessions, 0, sizeof(sessions));
+    return respond(req, "200 OK", "Login settings saved. Duration changes apply to new logins.");
 }
 
 static esp_err_t asset_handler(httpd_req_t *req)
 {
     const bool script = strcmp(req->uri, "/login.js") == 0;
+    if (!script && !settings.login_enabled) {
+        httpd_resp_set_hdr(req, "Location", "/");
+        return respond(req, "303 See Other", "Login is disabled.");
+    }
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
     httpd_resp_set_hdr(req, "X-Frame-Options", "DENY");
@@ -204,19 +244,36 @@ static esp_err_t asset_handler(httpd_req_t *req)
 
 esp_err_t web_auth_init(void)
 {
-    session_days = 1;
+    memset(&settings, 0, sizeof(settings));
+    settings.version = 1;
+    settings.session_days = 1;
+    settings.login_enabled = 1;
+    if (!valid_password(CONFIG_OTA_SUITE_WEB_PASSWORD)) {
+        ESP_LOGE(TAG, "Invalid configured web password: use 8-63 printable ASCII characters");
+        return ESP_ERR_INVALID_STATE;
+    }
+    memcpy(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD, strlen(CONFIG_OTA_SUITE_WEB_PASSWORD));
     nvs_handle_t handle;
     esp_err_t err = nvs_open("web_auth", NVS_READONLY, &handle);
     if (err == ESP_OK) {
-        err = nvs_get_u8(handle, "session_days", &session_days);
+        size_t size = sizeof(settings);
+        err = nvs_get_blob(handle, "settings", &settings, &size);
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            err = nvs_get_u8(handle, "session_days", &settings.session_days);
+        } else if (err == ESP_OK && size != sizeof(settings)) {
+            err = ESP_ERR_INVALID_STATE;
+        }
         nvs_close(handle);
     }
     if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGE(TAG, "Cannot load login duration: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Cannot load login settings: %s", esp_err_to_name(err));
         return err;
     }
-    if (session_days != 1 && session_days != 7) {
-        ESP_LOGE(TAG, "Invalid stored login duration");
+    if (settings.version != 1 || settings.login_enabled > 1 ||
+        (settings.session_days != 1 && settings.session_days != 7) ||
+        settings.password[sizeof(settings.password) - 1] != '\0' ||
+        !valid_password(settings.password)) {
+        ESP_LOGE(TAG, "Invalid stored login settings");
         return ESP_ERR_INVALID_STATE;
     }
     memset(sessions, 0, sizeof(sessions));
@@ -242,7 +299,8 @@ esp_err_t web_auth_register(httpd_handle_t server)
 }
 
 const char *web_auth_csrf_token(void) { return csrf_token; }
-unsigned web_auth_session_days(void) { return session_days; }
+unsigned web_auth_session_days(void) { return settings.session_days; }
+bool web_auth_login_enabled(void) { return settings.login_enabled != 0; }
 bool web_auth_settings_password_required(void)
 {
 #ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD

@@ -2,12 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menu "OTA Suite web interface"
+    config OTA_SUITE_WEB_PASSWORD
+        string "Initial web login password"
+        default "ebctester"
+        help
+            Initial admin password for login and settings confirmation.
+            Use 8-63 printable ASCII characters without leading or trailing
+            spaces. A password saved through
+            Login Settings takes precedence and survives firmware updates.
+            This does not change the setup access point password.
     config OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
         bool "Require admin password when saving web settings"
         default y
         help
-            Require the access point/admin password for every settings save,
-            in addition to a valid login session and CSRF token. Extensions
+            Require the configured web admin password for every settings save,
+            even when browser login is disabled, in addition to a CSRF token
+            and a valid session when login is enabled. Extensions
             must use web_interface_authorize_settings_request for settings.
             This does not affect test controls, uploads or OTA actions.
     config OTA_SUITE_WEB_SD_LANGUAGES

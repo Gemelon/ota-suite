@@ -211,7 +211,7 @@ function showMessage(id, message, isError = false) {
 }
 
 function updateButtons() {
-  byId("logout").disabled = sending || !currentStatus;
+  byId("logout").disabled = sending || !currentStatus || !currentStatus.loginEnabled;
   byId("login-settings-save").disabled = sending || !currentStatus;
   byId("ota-start").disabled = sending || !currentStatus?.otaReady ||
     !currentStatus?.updateAvailable || currentStatus?.updateStale || currentStatus?.updateChecking;
@@ -365,8 +365,11 @@ function render(status) {
   currentStatus = status;
   if (!loginSettingsLoaded) {
     byId("session-days").value = String(status.sessionDays || 1);
+    byId("login-enabled").checked = status.loginEnabled;
+    byId("session-days").disabled = !status.loginEnabled;
     loginSettingsLoaded = true;
   }
+  byId("logout").hidden = !status.loginEnabled;
   byId("settings-password-note").textContent = I18n.t(
     status.settingsPasswordRequired ? "auth.confirmEnabled" : "auth.confirmDisabled");
   document.title = status.project;
@@ -484,6 +487,11 @@ async function sendAction(url, body, version) {
     if (!response.ok) throw new Error(I18n.message(message));
     showMessage("action-result", message);
     if (url === "/api/network") byId("password").value = "";
+    if (url === "/api/auth/settings") {
+      byId("login-new-password").value = "";
+      byId("login-confirm-password").value = "";
+      if (body.password || body.loginEnabled !== currentStatus.loginEnabled) location.replace("/");
+    }
     currentStatus = null;
   } catch (error) {
     showMessage("action-result",
@@ -533,10 +541,26 @@ byId("wifi-form").addEventListener("submit", (event) => {
 byId("login-settings-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (sending || !currentStatus) return;
-  void sendAction("/api/auth/settings", { sessionDays: Number(byId("session-days").value) });
+  const password = byId("login-new-password").value;
+  if ((password && (!/^[\x20-\x7e]{8,63}$/.test(password) || password.trim() !== password)) ||
+      password !== byId("login-confirm-password").value) {
+    showMessage("action-result", I18n.t("auth.passwordInvalid"), true);
+    return;
+  }
+  const settings = {
+    sessionDays: Number(byId("session-days").value),
+    loginEnabled: byId("login-enabled").checked,
+  };
+  if (password) settings.password = password;
+  void sendAction("/api/auth/settings", settings);
+});
+
+byId("login-enabled").addEventListener("change", () => {
+  byId("session-days").disabled = !byId("login-enabled").checked;
 });
 
 byId("logout").addEventListener("click", async () => {
+  if (byId("logout").disabled) return;
   try {
     const response = await fetch("/api/auth/logout", {
       method: "POST", headers: { "X-CSRF-Token": csrfToken },

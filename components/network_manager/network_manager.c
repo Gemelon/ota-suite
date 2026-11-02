@@ -283,7 +283,7 @@ esp_err_t network_manager_init(void)
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "Setup AP: %s / password: %s", status.ap_ssid, admin_password);
-    ESP_LOGI(TAG, "Open http://192.168.4.1; web login: admin / AP password");
+    ESP_LOGI(TAG, "Open http://192.168.4.1; web login: admin / configured web password");
     set_message(has_credentials ? "Connecting to saved Wi-Fi." :
                 "No Wi-Fi configured yet. Please save credentials.");
     return ESP_OK;

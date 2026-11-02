@@ -73,8 +73,10 @@ layout before flashing. Partition-table changes cannot be installed by OTA.
 
 The default AP is `OTASuite-XXXXXX`. Without a configured password, a random
 one is generated once, stored in NVS, and printed to serial. Connect using it,
-open `http://192.168.4.1`, and log in as `admin`. The AP password is also the
-admin password. The status LED is initially disabled; check its GPIO when enabling.
+open `http://192.168.4.1`, and log in as `admin` with the initial web password
+`ebctester` (`CONFIG_OTA_SUITE_WEB_PASSWORD`). The web password is independent
+of the AP password; change it under Login Settings on first use.
+The status LED is initially disabled; check its GPIO when enabling.
 Do not commit local `sdkconfig`, credentials, editor settings, or build outputs.
 
 ## Integrating into an application
@@ -127,22 +129,40 @@ reload the page but do not issue device commands.
 
 ### Login sessions and settings confirmation
 
-The login page at `/login` uses `admin` and the AP password. Login creates a
+The login page at `/login` uses `admin` and the configured web password. Login creates a
 random 256-bit persistent `HttpOnly; SameSite=Lax` cookie. Under Settings,
 select daily (24 hours, default) or weekly (7 days) login. The choice is saved
 in NVS and applies to new logins. Sessions have fixed monotonic expiry without
 renewal and are invalidated by device restart or logout. Eight concurrent
 browser sessions are supported; a ninth login returns HTTP 429.
 
+**Settings → Login Settings** also changes the password (8-63 printable ASCII
+characters without leading or trailing spaces; empty keeps the current value)
+and can disable browser login.
+The initial web password is `CONFIG_OTA_SUITE_WEB_PASSWORD`, default `ebctester`.
+Existing devices without saved web settings use this initial password after
+updating. It does not change the setup AP password. Settings are persisted as
+one versioned NVS blob (`web_auth/settings`); legacy `session_days` is migrated
+on the first successful save. Saved passwords survive updates. Password or
+login-policy changes revoke all sessions and the UI reloads.
+
+`POST /api/auth/settings` accepts `sessionDays` (1 or 7), optional boolean
+`loginEnabled` and optional string `password`, confirmed with the current
+password. `/api/status` returns `sessionDays`, `loginEnabled` and
+`settingsPasswordRequired`, never the password.
+
 `POST /api/auth/login` accepts JSON `username`/`password` with `X-Web-Login: 1`.
 Protected APIs require the cookie; mutations additionally require
 `X-CSRF-Token` from `/api/status`. Logout is `POST /api/auth/logout`.
 Basic-auth credentials are no longer accepted. Bundled login/CSS/language
-assets are public, but status and extension assets remain authenticated.
+assets are public. When browser login is enabled (default), status and extension
+assets remain authenticated. When disabled, the interface and controls are open
+to anyone on the network, `/login` redirects to `/`, and logout is hidden.
+Mutations still require CSRF tokens and settings confirmation is unchanged.
 
 `CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` defaults to `y`. Every settings
-save then requires the AP/admin password again, not just a valid session.
-The built-in Wi-Fi and login-duration forms implement this. Application
+save then requires the current web password again, even with browser login
+disabled. The built-in Wi-Fi and login-settings forms implement this. Application
 settings endpoints must call `web_interface_authorize_settings_request(req)`
 before parsing/applying data. Their UI must call
 `await WebAuth.settingsHeaders()` and stop if it returns `null` (cancel).
