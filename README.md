@@ -48,6 +48,16 @@ cards, and SD language providers.
 | `cmake/publish_firmware.cmake` | Versioned image and atomic manifest |
 | `examples/esp32s3-starter` | Minimal example application |
 
+The RGB indicator defaults to one WS2812 pixel with the existing idle animation
+and OTA colors. Applications can call `status_led_set_renderer(max_leds,
+renderer)` before `status_led_start()` to drive up to 16 pixels with their own
+normal colors and per-pixel `ota_override` flags. The 50 ms LED task invokes the
+renderer; it must be short and must not perform storage or network operations.
+OTA overrides only opted-in pixels while non-idle, and normal rendering resumes
+when idle. Set unused pixels to black with `ota_override = false`. Applications
+own function groups, settings, and persistence; the driver has no dependency on
+tester-specific services.
+
 Development content is always English; requested UI translations are retained.
 See [AGENTS.md](AGENTS.md).
 

@@ -34,13 +34,19 @@ static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 static ota_status_t status;
 static TaskHandle_t worker;
 static update_candidate_t selected;
+static ota_runtime_config_t runtime;
+
+esp_err_t ota_manager_set_runtime_config(const ota_runtime_config_t *config)
+{
+    if (config == NULL || config->manifest_url == NULL) return ESP_ERR_INVALID_ARG;
+    runtime = *config;
+    return ESP_OK;
+}
 
 static bool valid_url(const char *url)
 {
     bool scheme_allowed = strncmp(url, "https://", 8) == 0;
-#ifdef CONFIG_OTA_SUITE_OTA_ALLOW_HTTP
-    scheme_allowed = scheme_allowed || strncmp(url, "http://", 7) == 0;
-#endif
+    scheme_allowed = scheme_allowed || (runtime.allow_http && strncmp(url, "http://", 7) == 0);
     if (!scheme_allowed || strlen(url) > 1024) {
         return false;
     }
@@ -230,9 +236,14 @@ static void ota_worker(void *arg)
 
 esp_err_t ota_manager_init(void)
 {
-    status.configured = valid_url(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL);
+    if (runtime.manifest_url == NULL) return ESP_ERR_INVALID_STATE;
+    status.configured = runtime.services_enabled && valid_url(runtime.manifest_url);
     status.insecure_http = status.configured &&
-                           strncmp(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, "http://", 7) == 0;
+                           strncmp(runtime.manifest_url, "http://", 7) == 0;
+    if (!runtime.services_enabled) {
+        strlcpy(status.message, "OTA disabled while device configuration is inactive.", sizeof(status.message));
+        return ESP_OK;
+    }
     strlcpy(status.message, status.configured ?
             "OTA starts only via the button. Startup checks in progress." :
             "OTA disabled: configure an HTTPS URL or explicitly allowed HTTP URL.",

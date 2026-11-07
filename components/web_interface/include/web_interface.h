@@ -30,6 +30,22 @@ typedef struct {
     bool (*visible)(void);
 } web_interface_extension_t;
 
+typedef struct {
+    const char *password;
+    const char *tab_order;
+    const char *primary_tabs;
+    bool settings_require_password;
+    bool sd_languages;
+    bool peripherals_active;
+    bool maker_mode;
+    unsigned session_days;
+    bool login_enabled;
+    esp_err_t (*save_login)(const char *password, unsigned session_days, bool login_enabled);
+} web_interface_runtime_config_t;
+
+esp_err_t web_interface_set_runtime_config(const web_interface_runtime_config_t *config);
+const web_interface_runtime_config_t *web_interface_get_runtime_config(void);
+/* The descriptor and referenced assets/routes must outlive the web server. */
 esp_err_t web_interface_register_extension(const web_interface_extension_t *extension);
 bool web_interface_authorize_request(httpd_req_t *req, bool mutation);
 bool web_interface_authorize_settings_request(httpd_req_t *req);

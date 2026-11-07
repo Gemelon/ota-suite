@@ -17,6 +17,13 @@ typedef struct {
     char message[128];
 } network_status_t;
 
+typedef struct {
+    const char *ap_password;
+    const char *sntp_server;
+    bool ap_only;
+} network_runtime_config_t;
+
+esp_err_t network_manager_set_runtime_config(const network_runtime_config_t *config);
 esp_err_t network_manager_init(void);
 esp_err_t network_manager_configure(const char *ssid, const char *password);
 void network_manager_get_status(network_status_t *status);

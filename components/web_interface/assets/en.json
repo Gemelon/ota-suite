@@ -741,6 +741,17 @@
     "text.c5b1f84a90d2": "Another operation is in progress.",
     "text.36d9a2e7f1b4": "The SD database is not ready.",
     "text.e1708b3c5a96": "Confirm that the charging parameters and current/voltage/power limits have been checked.",
-    "text.0f4c7d29b6e8": "A measurement is running."
+    "text.0f4c7d29b6e8": "A measurement is running.",
+    "leds.title": "LED function groups",
+    "leds.description": "Assign each WS2812 LED a normal function group. Enable OTA to override that LED during firmware updates. Two LEDs are on the board; extensions follow them in chain order.",
+    "leds.inactive": "LED hardware is disabled or the device configuration is inactive. Assignments will be used when LED hardware is enabled.",
+    "leds.count": "Total LED count (including extensions)",
+    "leds.legend": "Tester mode: off = disconnected; green = connected and idle; blue = manual operation; orange = automatic plan. Message frame status: off after 5 seconds without messages; dark green = receiving; bright green = valid-message flash; orange = communication error. OTA: pulsing blue = downloading; pulsing yellow = verifying; steady green = restarting; blinking red = failed.",
+    "leds.save": "Save LED settings",
+    "leds.ota": "OTA override",
+    "leds.invalidCount": "LED count must be a whole number from 1 to 16.",
+    "leds.group.off": "Off",
+    "leds.group.tester": "Tester mode",
+    "leds.group.frames": "Message frame status"
   }
 }

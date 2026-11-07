@@ -34,6 +34,16 @@ static QueueHandle_t config_queue;
 static char admin_password[64];
 static bool has_credentials;
 static bool connecting;
+static network_runtime_config_t runtime;
+
+esp_err_t network_manager_set_runtime_config(const network_runtime_config_t *config)
+{
+    if (config == NULL || config->ap_password == NULL || config->sntp_server == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    runtime = *config;
+    return ESP_OK;
+}
 
 static void set_message(const char *message)
 {
@@ -194,10 +204,10 @@ static esp_err_t load_settings(credentials_t *credentials)
             has_credentials = credentials->ssid[0] != '\0';
         }
     }
-    if (err == ESP_OK && CONFIG_OTA_SUITE_AP_PASSWORD[0] != '\0') {
-        strlcpy(admin_password, CONFIG_OTA_SUITE_AP_PASSWORD, sizeof(admin_password));
-        if (strlen(CONFIG_OTA_SUITE_AP_PASSWORD) < 8 ||
-            strlen(CONFIG_OTA_SUITE_AP_PASSWORD) >= sizeof(admin_password)) {
+    if (err == ESP_OK && runtime.ap_password[0] != '\0') {
+        strlcpy(admin_password, runtime.ap_password, sizeof(admin_password));
+        if (strlen(runtime.ap_password) < 8 ||
+            strlen(runtime.ap_password) >= sizeof(admin_password)) {
             err = ESP_ERR_INVALID_ARG;
         }
     } else if (err == ESP_OK) {
@@ -224,28 +234,26 @@ static esp_err_t load_settings(credentials_t *credentials)
 
 esp_err_t network_manager_init(void)
 {
-    esp_err_t err = nvs_flash_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "NVS initialization failed: %s; refusing to erase stored settings",
-                 esp_err_to_name(err));
-        return err;
-    }
+    if (runtime.ap_password == NULL) return ESP_ERR_INVALID_STATE;
     credentials_t credentials = {0};
-    err = load_settings(&credentials);
+    esp_err_t err = load_settings(&credentials);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Cannot load network settings: %s", esp_err_to_name(err));
         return err;
     }
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    if (!esp_netif_create_default_wifi_ap() || !esp_netif_create_default_wifi_sta()) {
+    if (!esp_netif_create_default_wifi_ap() ||
+        (!runtime.ap_only && !esp_netif_create_default_wifi_sta())) {
         return ESP_ERR_NO_MEM;
     }
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, network_event, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, network_event, NULL));
+    if (!runtime.ap_only) {
+        ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, network_event, NULL));
+        ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, network_event, NULL));
+    }
 
     uint8_t mac[6];
     ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP));
@@ -267,24 +275,25 @@ esp_err_t network_manager_init(void)
     station.sta.pmf_cfg.capable = true;
     memset(&credentials, 0, sizeof(credentials));
 
-    config_queue = xQueueCreate(1, sizeof(credentials_t));
-    if (config_queue == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(runtime.ap_only ? WIFI_MODE_AP : WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &station));
-    esp_sntp_config_t sntp = ESP_NETIF_SNTP_DEFAULT_CONFIG(CONFIG_OTA_SUITE_SNTP_SERVER);
-    sntp.start = false;
-    sntp.sync_cb = time_sync;
-    ESP_ERROR_CHECK(esp_netif_sntp_init(&sntp));
+    if (!runtime.ap_only) {
+        config_queue = xQueueCreate(1, sizeof(credentials_t));
+        if (config_queue == NULL) return ESP_ERR_NO_MEM;
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &station));
+        esp_sntp_config_t sntp = ESP_NETIF_SNTP_DEFAULT_CONFIG(runtime.sntp_server);
+        sntp.start = false;
+        sntp.sync_cb = time_sync;
+        ESP_ERROR_CHECK(esp_netif_sntp_init(&sntp));
+    }
     ESP_ERROR_CHECK(esp_wifi_start());
-    if (xTaskCreate(network_worker, "network", 4096, NULL, 4, NULL) != pdPASS) {
+    if (!runtime.ap_only && xTaskCreate(network_worker, "network", 4096, NULL, 4, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "Setup AP: %s / password: %s", status.ap_ssid, admin_password);
+    ESP_LOGI(TAG, "Setup AP: %s", status.ap_ssid);
     ESP_LOGI(TAG, "Open http://192.168.4.1; web login: admin / configured web password");
-    set_message(has_credentials ? "Connecting to saved Wi-Fi." :
+    set_message(runtime.ap_only ? "Maker setup: access point only. Activate configuration to enable Wi-Fi station." :
+                has_credentials ? "Connecting to saved Wi-Fi." :
                 "No Wi-Fi configured yet. Please save credentials.");
     return ESP_OK;
 }
@@ -318,6 +327,19 @@ esp_err_t network_manager_configure(const char *ssid, const char *password)
     credentials_t credentials = {0};
     strlcpy(credentials.ssid, ssid, sizeof(credentials.ssid));
     strlcpy(credentials.password, password, sizeof(credentials.password));
+    if (runtime.ap_only) {
+        const esp_err_t err = save_credentials(&credentials);
+        memset(&credentials, 0, sizeof(credentials));
+        portENTER_CRITICAL(&lock);
+        status.configuring = false;
+        portEXIT_CRITICAL(&lock);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Cannot save station credentials: %s", esp_err_to_name(err));
+        } else {
+            set_message("Wi-Fi saved. Station will start after activating the configuration.");
+        }
+        return err;
+    }
     BaseType_t sent = xQueueSend(config_queue, &credentials, 0);
     memset(&credentials, 0, sizeof(credentials));
     if (sent != pdTRUE) {

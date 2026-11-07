@@ -203,14 +203,8 @@ static esp_err_t settings_handler(httpd_req_t *req)
     }
     if (cJSON_IsString(password)) memset(password->valuestring, 0, strlen(password->valuestring));
     cJSON_Delete(json);
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("web_auth", NVS_READWRITE, &handle);
-    if (err == ESP_OK) {
-        /* One blob keeps the password and login policy together across interrupted writes. */
-        err = nvs_set_blob(handle, "settings", &next, sizeof(next));
-        if (err == ESP_OK) err = nvs_commit(handle);
-        nvs_close(handle);
-    }
+    const web_interface_runtime_config_t *runtime = web_interface_get_runtime_config();
+    esp_err_t err = runtime->save_login(next.password, next.session_days, next.login_enabled != 0);
     if (err != ESP_OK) {
         memset(&next, 0, sizeof(next));
         ESP_LOGE(TAG, "Cannot save login settings: %s", esp_err_to_name(err));
@@ -246,29 +240,14 @@ esp_err_t web_auth_init(void)
 {
     memset(&settings, 0, sizeof(settings));
     settings.version = 1;
-    settings.session_days = 1;
-    settings.login_enabled = 1;
-    if (!valid_password(CONFIG_OTA_SUITE_WEB_PASSWORD)) {
+    const web_interface_runtime_config_t *runtime = web_interface_get_runtime_config();
+    settings.session_days = runtime->session_days;
+    settings.login_enabled = runtime->login_enabled;
+    if (runtime->password == NULL || !valid_password(runtime->password)) {
         ESP_LOGE(TAG, "Invalid configured web password: use 8-63 printable ASCII characters");
         return ESP_ERR_INVALID_STATE;
     }
-    memcpy(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD, strlen(CONFIG_OTA_SUITE_WEB_PASSWORD));
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("web_auth", NVS_READONLY, &handle);
-    if (err == ESP_OK) {
-        size_t size = sizeof(settings);
-        err = nvs_get_blob(handle, "settings", &settings, &size);
-        if (err == ESP_ERR_NVS_NOT_FOUND) {
-            err = nvs_get_u8(handle, "session_days", &settings.session_days);
-        } else if (err == ESP_OK && size != sizeof(settings)) {
-            err = ESP_ERR_INVALID_STATE;
-        }
-        nvs_close(handle);
-    }
-    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGE(TAG, "Cannot load login settings: %s", esp_err_to_name(err));
-        return err;
-    }
+    memcpy(settings.password, runtime->password, strlen(runtime->password));
     if (settings.version != 1 || settings.login_enabled > 1 ||
         (settings.session_days != 1 && settings.session_days != 7) ||
         settings.password[sizeof(settings.password) - 1] != '\0' ||
@@ -303,9 +282,5 @@ unsigned web_auth_session_days(void) { return settings.session_days; }
 bool web_auth_login_enabled(void) { return settings.login_enabled != 0; }
 bool web_auth_settings_password_required(void)
 {
-#ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
-    return true;
-#else
-    return false;
-#endif
+    return web_interface_get_runtime_config()->settings_require_password;
 }

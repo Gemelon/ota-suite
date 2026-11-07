@@ -33,7 +33,19 @@ extern const unsigned char de_start[] asm("_binary_de_json_start");
 extern const unsigned char de_end[] asm("_binary_de_json_end");
 
 static const char *TAG = "web";
-#define MAX_EXTENSIONS 12
+#define MAX_EXTENSIONS 16
+static web_interface_runtime_config_t runtime;
+
+esp_err_t web_interface_set_runtime_config(const web_interface_runtime_config_t *config)
+{
+    if (config == NULL || config->password == NULL || config->tab_order == NULL ||
+        config->primary_tabs == NULL || config->save_login == NULL) return ESP_ERR_INVALID_ARG;
+    runtime = *config;
+    return ESP_OK;
+}
+
+const web_interface_runtime_config_t *web_interface_get_runtime_config(void) { return &runtime; }
+
 static const web_interface_extension_t *extensions[MAX_EXTENSIONS];
 static size_t extension_count;
 static httpd_uri_t extension_asset_routes[MAX_EXTENSIONS][2];
@@ -115,12 +127,11 @@ static esp_err_t language_handler(httpd_req_t *req)
     if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)en_start, en_end - en_start);
     if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",de:");
     if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)de_start, de_end - de_start);
-#ifdef CONFIG_OTA_SUITE_WEB_SD_LANGUAGES
-    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req,
-        strstr(req->uri, "?login=1") != NULL ? ",loginPage:true,sdEnabled:false};\n" : ",sdEnabled:true};\n");
-#else
-    if (err == ESP_OK) err = httpd_resp_sendstr_chunk(req, ",sdEnabled:false};\n");
-#endif
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, strstr(req->uri, "?login=1") != NULL ?
+            ",loginPage:true,sdEnabled:false};\n" :
+            runtime.sd_languages && runtime.peripherals_active ? ",sdEnabled:true};\n" : ",sdEnabled:false};\n");
+    }
     if (err == ESP_OK) err = httpd_resp_send_chunk(req, (const char *)i18n_start, i18n_end - i18n_start);
     return err == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : err;
 }
@@ -168,9 +179,12 @@ static esp_err_t status_handler(httpd_req_t *req)
         cJSON_AddNumberToObject(root, "sessionDays", web_auth_session_days()) &&
         cJSON_AddBoolToObject(root, "loginEnabled", web_auth_login_enabled()) &&
         cJSON_AddBoolToObject(root, "settingsPasswordRequired", web_auth_settings_password_required()) &&
-        cJSON_AddStringToObject(root, "tabOrder", CONFIG_OTA_SUITE_WEB_TAB_ORDER) &&
-        cJSON_AddStringToObject(root, "primaryTabs", CONFIG_OTA_SUITE_WEB_PRIMARY_TABS) &&
-        cJSON_AddStringToObject(root, "activityUrl", CONFIG_OTA_SUITE_WEB_ACTIVITY_URL) &&
+        cJSON_AddStringToObject(root, "tabOrder", runtime.maker_mode && !runtime.peripherals_active ?
+                               "maker-settings,settings,overview,debug" : runtime.tab_order) &&
+        cJSON_AddStringToObject(root, "primaryTabs", runtime.peripherals_active ? runtime.primary_tabs : "") &&
+        cJSON_AddStringToObject(root, "activityUrl", runtime.peripherals_active ? CONFIG_OTA_SUITE_WEB_ACTIVITY_URL : "") &&
+        cJSON_AddBoolToObject(root, "configActive", runtime.peripherals_active) &&
+        cJSON_AddStringToObject(root, "firmwareMode", runtime.maker_mode ? "maker" : "factory") &&
         cJSON_AddStringToObject(root, "ssid", network.ssid) &&
         cJSON_AddStringToObject(root, "apSsid", network.ap_ssid) &&
         cJSON_AddStringToObject(root, "ip", network.ip) &&
@@ -381,7 +395,7 @@ esp_err_t web_interface_start(void)
     config.recv_wait_timeout = 5;
     config.send_wait_timeout = 5;
     /* Built-in routes plus two asset routes and the API routes of each extension. */
-    config.max_uri_handlers = 80;
+    config.max_uri_handlers = 128;
     httpd_handle_t server = NULL;
     err = httpd_start(&server, &config);
     if (err != ESP_OK) {

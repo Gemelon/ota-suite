@@ -30,14 +30,13 @@ static int64_t checked_at;
 static int64_t attempted_at;
 static bool attempted;
 static bool installing;
+static update_check_runtime_config_t runtime;
 
-static bool http_allowed(void)
+esp_err_t update_check_set_runtime_config(const update_check_runtime_config_t *config)
 {
-#ifdef CONFIG_OTA_SUITE_OTA_ALLOW_HTTP
-    return true;
-#else
-    return false;
-#endif
+    if (config == NULL || config->manifest_url == NULL) return ESP_ERR_INVALID_ARG;
+    runtime = *config;
+    return ESP_OK;
 }
 
 static bool network_ready(void)
@@ -45,21 +44,21 @@ static bool network_ready(void)
     network_status_t network;
     network_manager_get_status(&network);
     return network.connected && !network.configuring &&
-           (strncmp(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, "http://", 7) == 0 || network.time_ready);
+           (strncmp(runtime.manifest_url, "http://", 7) == 0 || network.time_ready);
 }
 
 static bool parse_manifest(const char *body, size_t length, update_candidate_t *out)
 {
     const esp_partition_t *partition = esp_ota_get_next_update_partition(NULL);
-    return partition && update_manifest_parse(body, length, CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL,
+    return partition && update_manifest_parse(body, length, runtime.manifest_url,
            esp_app_get_description()->project_name, CONFIG_IDF_TARGET, partition->size, out);
 }
 
 static esp_err_t fetch_manifest(update_candidate_t *out)
 {
-    bool http = strncmp(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, "http://", 7) == 0;
+    bool http = strncmp(runtime.manifest_url, "http://", 7) == 0;
     esp_http_client_config_t config = {
-        .url = CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL,
+        .url = runtime.manifest_url,
         .crt_bundle_attach = http ? NULL : esp_crt_bundle_attach,
         .timeout_ms = 5000,
         .disable_auto_redirect = true,
@@ -150,7 +149,12 @@ static void check_worker(void *arg)
 
 esp_err_t update_check_init(void)
 {
-    status.configured = update_manifest_url_valid(CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL, http_allowed());
+    if (runtime.manifest_url == NULL) return ESP_ERR_INVALID_STATE;
+    if (!runtime.services_enabled) {
+        strlcpy(status.message, "Update checks disabled while device configuration is inactive.", sizeof(status.message));
+        return ESP_OK;
+    }
+    status.configured = update_manifest_url_valid(runtime.manifest_url, runtime.allow_http);
     strlcpy(status.message, status.configured ? "No update check yet." :
             "Invalid manifest URL or HTTP not allowed.", sizeof(status.message));
     return xTaskCreate(check_worker, "update_check", 8192, NULL, 3, &worker) == pdPASS ?
@@ -159,6 +163,7 @@ esp_err_t update_check_init(void)
 
 esp_err_t update_check_start(void)
 {
+    if (worker == NULL) return ESP_ERR_INVALID_STATE;
     if (!network_ready()) return ESP_ERR_INVALID_STATE;
     portENTER_CRITICAL(&lock);
     bool allowed = status.configured && !status.checking && !installing;

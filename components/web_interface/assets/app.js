@@ -286,8 +286,10 @@ function renderExtensions(extensions) {
       if (!pane) {
         pane = document.createElement("div");
         pane.id = `settings-ext-${extension.id}`;
-        pane.className = "mt-4";
-        byId("settings-extensions").append(pane);
+        pane.className = extension.id === "tester" ? "mb-4" : "mt-4";
+        const settingsExtensions = byId("settings-extensions");
+        if (extension.id === "tester") settingsExtensions.prepend(pane);
+        else settingsExtensions.append(pane);
       }
       if (activeTab === "settings") void loadExtension(extension, pane);
       continue;
@@ -326,12 +328,17 @@ function renderExtensions(extensions) {
 
 /* Reorders the tab buttons; the first configured tab is opened once unless the user chose one. */
 function applyTabOrder(order) {
-  const ids = String(order || "").split(",").map((id) => id.trim()).filter((id) => byId(`tab-button-${id}`));
+  const ids = String(order || "").split(",").map((id) => id.trim())
+    .filter((id) => id !== "debug" && byId(`tab-button-${id}`));
   const tabs = byId("web-tabs");
   for (const id of ids) tabs.append(byId(`tab-button-${id}`).parentElement);
   for (const button of [...tabs.querySelectorAll("[data-tab-target]")]) {
-    if (!ids.includes(button.dataset.tabTarget)) tabs.append(button.parentElement);
+    if (button.dataset.tabTarget !== "debug" && !ids.includes(button.dataset.tabTarget)) {
+      tabs.append(button.parentElement);
+    }
   }
+  const debugButton = byId("tab-button-debug");
+  if (debugButton) tabs.append(debugButton.parentElement);
   if (!initialTabApplied && ids.length) {
     initialTabApplied = true;
     if (!userSelectedTab && ids[0] !== activeTab) {

@@ -13,6 +13,10 @@
 #include "web_interface.h"
 #include "update_check.h"
 
+static bool led_enabled;
+
+void device_app_set_led_enabled(bool enabled) { led_enabled = enabled; }
+
 static void confirm_boot(void *arg)
 {
     (void)arg;
@@ -41,12 +45,12 @@ esp_err_t device_app_start(void)
     if (err != ESP_OK) {
         return err;
     }
-#ifdef CONFIG_OTA_SUITE_STATUS_LED_ENABLE
-    err = status_led_start();
-    if (err != ESP_OK) {
-        return err;
+    if (led_enabled) {
+        err = status_led_start();
+        if (err != ESP_OK) {
+            return err;
+        }
     }
-#endif
     if (xTaskCreate(confirm_boot, "confirm_boot", 3072, NULL, 3, NULL) != pdPASS) {
         ESP_LOGE("device_app", "Cannot create boot confirmation task");
         return ESP_ERR_NO_MEM;

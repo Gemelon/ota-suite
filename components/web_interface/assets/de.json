@@ -741,6 +741,17 @@
     "text.c5b1f84a90d2": "Ein anderer Vorgang ist noch in Arbeit.",
     "text.36d9a2e7f1b4": "Die SD-Datenbank ist nicht bereit.",
     "text.e1708b3c5a96": "Bestätigen, dass Ladeparameter und Strom-/Spannungs-/Leistungsgrenzen geprüft wurden.",
-    "text.0f4c7d29b6e8": "Eine Messung läuft."
+    "text.0f4c7d29b6e8": "Eine Messung läuft.",
+    "leds.title": "LED-Funktionsgruppen",
+    "leds.description": "Jeder WS2812-LED eine normale Funktionsgruppe zuweisen. OTA aktivieren, um diese LED während Firmware-Updates zu übersteuern. Zwei LEDs sind auf dem Board; Erweiterungen folgen in der Kette.",
+    "leds.inactive": "LED-Hardware ist deaktiviert oder die Gerätekonfiguration ist inaktiv. Die Zuordnung wird verwendet, sobald die LED-Hardware aktiviert ist.",
+    "leds.count": "Gesamtzahl der LEDs (einschließlich Erweiterungen)",
+    "leds.legend": "Tester-Modus: aus = nicht verbunden; grün = verbunden und bereit; blau = manueller Betrieb; orange = automatischer Testplan. Nachrichtenstatus: aus nach 5 Sekunden ohne Nachrichten; dunkelgrün = Empfang; hellgrüner Blitz = gültige Nachricht; orange = Kommunikationsfehler. OTA: blau pulsierend = Download; gelb pulsierend = Prüfung; grün dauerhaft = Neustart; rot blinkend = fehlgeschlagen.",
+    "leds.save": "LED-Einstellungen speichern",
+    "leds.ota": "OTA-Vorrang",
+    "leds.invalidCount": "Die LED-Anzahl muss eine ganze Zahl von 1 bis 16 sein.",
+    "leds.group.off": "Aus",
+    "leds.group.tester": "Tester-Modus",
+    "leds.group.frames": "Nachrichtenstatus"
   }
 }

@@ -21,6 +21,13 @@ typedef struct {
     int64_t last_success_uptime;
 } update_check_status_t;
 
+typedef struct {
+    const char *manifest_url;
+    bool allow_http;
+    bool services_enabled;
+} update_check_runtime_config_t;
+
+esp_err_t update_check_set_runtime_config(const update_check_runtime_config_t *config);
 esp_err_t update_check_init(void);
 esp_err_t update_check_start(void);
 void update_check_get_status(update_check_status_t *out);
