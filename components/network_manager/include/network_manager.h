@@ -5,6 +5,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 typedef struct {
@@ -21,6 +22,9 @@ typedef struct {
     const char *ap_password;
     const char *sntp_server;
     bool ap_only;
+    /* Zero keeps the default interval. Callback runs in the SNTP task and must not block. */
+    uint32_t sntp_sync_interval_ms;
+    void (*time_synced)(int64_t utc);
 } network_runtime_config_t;
 
 esp_err_t network_manager_set_runtime_config(const network_runtime_config_t *config);

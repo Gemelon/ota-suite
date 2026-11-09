@@ -145,6 +145,32 @@ let activityFrames = null;
 let activityTimer = 0;
 let blinkTimer = 0;
 let framesToBlink = 0;
+let clockUtc = 0;
+let clockReceivedAt = 0;
+let clockTimer = 0;
+
+function tickClock() {
+  clearTimeout(clockTimer);
+  const age = performance.now() - clockReceivedAt;
+  const valid = clockUtc > 0 && age < 15000;
+  const date = valid ? new Date(clockUtc * 1000 + age) : null;
+  byId("device-clock-time").textContent = date ?
+    date.toLocaleTimeString(I18n.locale, { hour12: false }) : "--:--:--";
+  byId("device-clock-date").textContent = date ? date.toLocaleDateString(I18n.locale) : "----";
+  if (date) byId("device-clock").title = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  clockTimer = setTimeout(tickClock, 1000);
+}
+
+function renderClock(status) {
+  byId("device-clock").classList.toggle("d-none", !status.clockEnabled);
+  clockUtc = Number.isFinite(status.clockUtc) && status.clockUtc > 0 ? status.clockUtc : 0;
+  if (status.clockEnabled) {
+    clockReceivedAt = performance.now();
+    byId("frame-indicator").classList.remove("d-none");
+    tickClock();
+  }
+  else clearTimeout(clockTimer);
+}
 
 function toggleFrameLed() {
   blinkTimer = 0;
@@ -370,6 +396,7 @@ document.querySelectorAll("[data-tab-target]").forEach((button) => {
 function render(status) {
   csrfToken = status.csrfToken;
   currentStatus = status;
+  renderClock(status);
   if (!loginSettingsLoaded) {
     byId("session-days").value = String(status.sessionDays || 1);
     byId("login-enabled").checked = status.loginEnabled;

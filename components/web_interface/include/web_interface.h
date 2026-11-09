@@ -6,6 +6,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "esp_http_server.h"
 #include "esp_err.h"
 
@@ -41,6 +42,8 @@ typedef struct {
     unsigned session_days;
     bool login_enabled;
     esp_err_t (*save_login)(const char *password, unsigned session_days, bool login_enabled);
+    /* Nonblocking. Return whether to show the clock; UTC seconds of zero mean unavailable. */
+    bool (*get_clock_utc)(int64_t *utc);
 } web_interface_runtime_config_t;
 
 esp_err_t web_interface_set_runtime_config(const web_interface_runtime_config_t *config);

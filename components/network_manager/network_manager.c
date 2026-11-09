@@ -13,6 +13,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
+#include "esp_sntp.h"
 #include "esp_random.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -86,6 +87,7 @@ static void time_sync(struct timeval *tv)
     status.time_ready = tv->tv_sec >= 1704067200;
     portEXIT_CRITICAL(&lock);
     ESP_LOGI(TAG, "SNTP time synchronized");
+    if (runtime.time_synced != NULL) runtime.time_synced((int64_t)tv->tv_sec);
 }
 
 static void network_event(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -285,6 +287,9 @@ esp_err_t network_manager_init(void)
         sntp.start = false;
         sntp.sync_cb = time_sync;
         ESP_ERROR_CHECK(esp_netif_sntp_init(&sntp));
+        if (runtime.sntp_sync_interval_ms != 0) {
+            esp_sntp_set_sync_interval(runtime.sntp_sync_interval_ms);
+        }
     }
     ESP_ERROR_CHECK(esp_wifi_start());
     if (!runtime.ap_only && xTaskCreate(network_worker, "network", 4096, NULL, 4, NULL) != pdPASS) {

@@ -168,6 +168,8 @@ static esp_err_t status_handler(httpd_req_t *req)
     ota_manager_get_status(&ota);
     bool busy = ota_manager_is_busy();
     bool ready = ota_manager_is_ready();
+    int64_t clock_utc = 0;
+    bool clock_enabled = runtime.get_clock_utc != NULL && runtime.get_clock_utc(&clock_utc);
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
         return error_response(req, "500 Internal Server Error", "Not enough memory for status.");
@@ -191,7 +193,9 @@ static esp_err_t status_handler(httpd_req_t *req)
         cJSON_AddStringToObject(root, "networkMessage", network.message) &&
         cJSON_AddBoolToObject(root, "connected", network.connected) &&
         cJSON_AddBoolToObject(root, "configuring", network.configuring) &&
-        cJSON_AddBoolToObject(root, "timeReady", network.time_ready) &&
+        cJSON_AddBoolToObject(root, "timeReady", network.time_ready || clock_utc > 0) &&
+        cJSON_AddBoolToObject(root, "clockEnabled", clock_enabled) &&
+        cJSON_AddNumberToObject(root, "clockUtc", (double)clock_utc) &&
         cJSON_AddBoolToObject(root, "otaConfigured", ota.configured) &&
         cJSON_AddBoolToObject(root, "otaInsecureHttp", ota.insecure_http) &&
         cJSON_AddBoolToObject(root, "bootConfirmed", ota.boot_confirmed) &&

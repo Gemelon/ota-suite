@@ -61,6 +61,22 @@ tester-specific services.
 Development content is always English; requested UI translations are retained.
 See [AGENTS.md](AGENTS.md).
 
+### Optional application clock integration
+
+`network_runtime_config_t.sntp_sync_interval_ms` overrides the SNTP interval;
+zero preserves the existing default. `time_synced(utc)` runs in the SNTP task
+after synchronization and must not block. Applications can notify their own
+RTC worker; the network component does not depend on a particular RTC driver.
+
+`web_interface_runtime_config_t.get_clock_utc` optionally supplies device UTC
+epoch seconds and whether the header clock should be visible. Zero UTC displays
+unavailable placeholders. Authenticated status includes `clockEnabled` and
+`clockUtc`; valid application time also sets `timeReady` for display.
+The header shows time above date beside the activity indicator, using the
+browser's time zone and monotonic interpolation of device UTC. After 15 seconds
+without fresh status, placeholders replace stale time. A missing callback keeps
+the clock hidden. OTA readiness still uses the network/OTA service's own checks.
+
 ## Download and build the example
 
 ```powershell
